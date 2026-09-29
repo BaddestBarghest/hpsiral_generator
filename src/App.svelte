@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { fly } from 'svelte/transition';
+  import { dur, FAST, MEDIUM } from './ui/motion';
   import { Button, Toast } from 'flowbite-svelte';
   import {
     AdjustmentsHorizontalOutline,
@@ -56,6 +58,21 @@
   let renderMode = $state<'worker' | 'inline' | ''>('');
   let error = $state<string | null>(null);
   let notice = $state<string | null>(null);
+
+  // Messages close themselves (errors stay longer); hovering over them pauses the timer.
+  const NOTICE_MS = 4000;
+  const ERROR_MS = 8000;
+  let hoveringToasts = $state(false);
+  $effect(() => {
+    if (!notice || hoveringToasts) return;
+    const id = setTimeout(() => (notice = null), NOTICE_MS);
+    return () => clearTimeout(id);
+  });
+  $effect(() => {
+    if (!error || hoveringToasts) return;
+    const id = setTimeout(() => (error = null), ERROR_MS);
+    return () => clearTimeout(id);
+  });
 
   interface RenderState {
     frame: number;
@@ -371,16 +388,26 @@
 {/if}
 
 <!-- Stacked, so a "saved" notice doesn't cover an earlier warning. -->
-<div class="fixed bottom-4 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col items-center gap-2">
+<div
+  class="fixed bottom-4 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col items-center gap-2"
+  role="status"
+  onmouseenter={() => (hoveringToasts = true)}
+  onmouseleave={() => (hoveringToasts = false)}
+>
+  <!-- Our own transitions: the Toast's built-in one only runs when it closes itself. -->
   {#if error}
-    <Toast color="red" class="max-w-md" dismissable onclose={() => (error = null)}>
-      {error}
-    </Toast>
+    <div in:fly={{ y: 16, duration: dur(MEDIUM) }} out:fly={{ y: 16, duration: dur(FAST) }}>
+      <Toast color="red" class="max-w-md" dismissable onclose={() => (error = null)}>
+        {error}
+      </Toast>
+    </div>
   {/if}
   {#if notice}
-    <Toast color="green" class="max-w-md" dismissable onclose={() => (notice = null)}>
-      {notice}
-    </Toast>
+    <div in:fly={{ y: 16, duration: dur(MEDIUM) }} out:fly={{ y: 16, duration: dur(FAST) }}>
+      <Toast color="green" class="max-w-md" dismissable onclose={() => (notice = null)}>
+        {notice}
+      </Toast>
+    </div>
   {/if}
 </div>
 
