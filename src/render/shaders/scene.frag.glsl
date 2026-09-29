@@ -1,4 +1,6 @@
 #version 300 es
+// Variant switches (defined by the renderer): S2 = draw the auxiliary spiral,
+// FINISH = drawing straight to the screen, so apply the finishing steps here (TEXT_MODE: see finish.glsl).
 precision highp float;
 
 out vec4 outColor;
@@ -36,18 +38,14 @@ uniform float uShift[3];     // palette steps
 uniform vec3 uAvg1;          // spiral 1 average colour (anti-moiré fade)
 uniform vec3 uAvg2;          // spiral 2 average arm colour
 
-uniform bool uS2Enabled;
 uniform float uS2Opacity;
 uniform int uS2Blend;        // 0 normal, 1 add, 2 multiply, 3 screen, 4 difference
 
-
 uniform float uHueShift;     // radians
-// Beat pulses, applied here only when drawing straight to the screen (no text, trails or
-// vignette); otherwise the post pass applies them on top of everything.
-uniform float uFlash;        // 0..1 mix towards uFlashColor (beat flash / strobe)
-uniform vec3 uFlashColor;
-uniform float uInvert;       // 0..1 mix towards the inverted image (beat inversion)
-uniform bool uDither;        // only when drawing straight to the screen
+
+#if FINISH
+#include "finish.glsl"
+#endif
 
 const float TAU = 6.283185307179586;
 const float KALEIDO_SECTORS = 6.0;
@@ -205,7 +203,8 @@ void main() {
   col = mix(col, uAvg1, smoothstep(0.6, 1.0, F.dv));
 
   // ── Auxiliary spiral: arms only, blended over the main spiral ───────────
-  if (uS2Enabled) {
+#if S2
+  {
     Spiral s2 = uSpiral[1];
     Field F2 = spiralField(p, s2, pixel);
     float k2 = floor(F2.v);
@@ -217,17 +216,12 @@ void main() {
     vec3 c2 = mix(bandColor(2, s2, armK2, F2.rho * GRADIENT_SCALE, kaleidoSector(F2.theta)), uAvg2, fade2);
     col = blend(col, c2, cov2 * uS2Opacity, uS2Blend);
   }
+#endif
 
   if (uHueShift != 0.0) col = clamp(hueRotate(col, uHueShift), 0.0, 1.0);
 
-  col = mix(col, 1.0 - col, uInvert);
-  col = mix(col, uFlashColor, uFlash);
-
-  if (uDither) {
-    // ±0.5 LSB interleaved-gradient-noise dither breaks up 8-bit banding in gradients,
-    // which video encoders would otherwise turn into visible steps. Static per pixel.
-    float n = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
-    col += (n - 0.5) / 255.0;
-  }
+#if FINISH
+  col = finish(col);
+#endif
   outColor = vec4(col, 1.0);
 }

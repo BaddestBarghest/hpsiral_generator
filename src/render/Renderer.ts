@@ -2,7 +2,7 @@ import type { Settings } from '../settings/schema';
 import { MAX_BAND_COLORS } from '../settings/schema';
 import { COLOR_PERIOD, type TimelineState } from '../engine/timeline';
 import { pulses, type Pulses } from '../engine/rhythm';
-import { isWall, textFrame } from '../engine/text';
+import { isWall, textFrame, type TextFrame } from '../engine/text';
 import { lcm } from '../engine/math';
 import { TextLayer } from './TextLayer';
 import { averageRgb, hexToRgb, type RGB } from './color';
@@ -16,13 +16,41 @@ import {
   type Program,
   type RenderTarget,
 } from './gl';
-import sceneFs from './shaders/scene.frag.glsl?raw';
-import postFs from './shaders/post.frag.glsl?raw';
+import sceneSrc from './shaders/scene.frag.glsl?raw';
+import postSrc from './shaders/post.frag.glsl?raw';
+import finishSrc from './shaders/finish.glsl?raw';
+
+// GLSL has no includes; splice the shared finishing code into both shaders.
+const withFinish = (src: string) => src.replace('#include "finish.glsl"', finishSrc);
+const SOURCES = { scene: withFinish(sceneSrc), post: withFinish(postSrc) };
+
+/**
+ * Compile-time switches for a shader variant. Features that are off are left out of the
+ * shader entirely rather than skipped by a runtime branch, which some drivers still pay for.
+ */
+interface SceneVariant {
+  /** Draw the auxiliary spiral. */
+  S2: 0 | 1;
+  /** Straight to the screen: apply the finishing steps (vignette, text, pulses, dither). */
+  FINISH: 0 | 1;
+  TEXT_MODE: TextMode;
+}
+interface PostVariant {
+  /** 0 spiral afterimage, 1 final output, 2 text afterimage. */
+  PASS: 0 | 1 | 2;
+  TEXT_MODE: TextMode;
+}
+
+/** Echoes fall below one 8-bit level after about this many half-lives. */
+const TRAIL_HALF_LIVES_TO_FADE = 8;
+
+/** How the finishing step gets its text (see finish.glsl). */
+const TEXT_MODE = { none: 0, texture: 1, layer: 2 } as const;
+type TextMode = (typeof TEXT_MODE)[keyof typeof TEXT_MODE];
 
 const MODES = { archimedean: 0, logarithmic: 1, concentric: 2, power: 3 } as const;
 const COLOR_MODES = { static: 0, gradient: 1, cycle: 2, kaleido: 3 } as const;
 const BLENDS = { normal: 0, add: 1, multiply: 2, screen: 3, difference: 4 } as const;
-
 
 /**
  * Weight of the previous afterimage for a frame lasting `dt` seconds. `trails` is the
@@ -41,14 +69,15 @@ export function trailWarmupFrames(s: Settings, fps: number): number {
 
 /**
  * Owns the WebGL2 context and draws one frame from (settings, timeline). Works on the main
- * thread or in a worker. With text, trails or a vignette active, the spirals render to a
- * texture, text to a layer of its own (with its own afterimage), and a final pass composites
- * them; otherwise the spirals draw straight to the screen.
+ * thread or in a worker. Without afterimages everything (spirals, vignette, text, pulses)
+ * is drawn in one pass straight to the screen. An afterimage needs the frame kept: the
+ * spirals then render to a texture, fading text to a layer of its own, and a final pass
+ * composites them.
  */
 export class Renderer {
   private gl: WebGL2RenderingContext;
-  private scene!: Program;
-  private post!: Program;
+  /** Compiled shader variants, built the first time each is needed. */
+  private programs = new Map<string, Program>();
   private vao!: WebGLVertexArrayObject;
   private text!: TextLayer;
   private lost = false;
@@ -61,6 +90,8 @@ export class Renderer {
   /** Ping-pong text layer (premultiplied), holding the text's own afterimage. */
   private textHistory: [RenderTarget | null, RenderTarget | null] = [null, null];
   private textHistoryValid = false;
+  /** Seconds since text was last on screen; the text layer is dropped once its echoes fade. */
+  private textHiddenFor = Infinity;
 
   /** `onNeedsRedraw`: something changed asynchronously (e.g. a font finished loading). */
   constructor(
@@ -80,6 +111,7 @@ export class Renderer {
 
   private onRestored = () => {
     // Old GL objects died with the context.
+    this.programs.clear();
     this.sceneTarget = null;
     this.history = [null, null];
     this.historyValid = false;
@@ -91,10 +123,24 @@ export class Renderer {
 
   private initResources(): void {
     const gl = this.gl;
-    this.scene = createProgram(gl, FULLSCREEN_VS, sceneFs);
-    this.post = createProgram(gl, FULLSCREEN_VS, postFs);
     this.vao = gl.createVertexArray()!;
     this.text = new TextLayer(gl, () => this.onNeedsRedraw());
+  }
+
+  /** The shader variant for these switches, compiled on first use. */
+  private program(kind: 'scene', v: SceneVariant): Program;
+  private program(kind: 'post', v: PostVariant): Program;
+  private program(kind: keyof typeof SOURCES, v: SceneVariant | PostVariant): Program {
+    const key = kind + JSON.stringify(v);
+    let prog = this.programs.get(key);
+    if (!prog) {
+      const defines = Object.entries(v).map(([k, x]) => `#define ${k} ${x}\n`).join('');
+      const src = SOURCES[kind].replace(/^#version 300 es\r?\n/, (line) => line + defines);
+      prog = createProgram(this.gl, FULLSCREEN_VS, src);
+      this.programs.set(key, prog);
+    }
+    this.gl.useProgram(prog.program);
+    return prog;
   }
 
   get isLost(): boolean {
@@ -132,43 +178,53 @@ export class Renderer {
     if (this.lost) return;
     const gl = this.gl;
     const { width, height } = this.canvas;
-    const trailMix = trailWeight(s.trails, dt);
-    const needsPost = s.trails > 0 || s.vignette > 0 || s.textEnabled;
     const pulse = pulses(s, tl.beatPhase);
+
+    const text = textFrame(s, tl.time, tl.beatPhase);
+    const textOn = s.textEnabled && text.phrase !== '' && text.alpha > 0;
+    if (textOn) this.text.update(s, text, width, height);
+    this.textHiddenFor = textOn ? 0 : this.textHiddenFor + dt;
+    // The text layer only needs keeping while it has echoes left to fade.
+    const textTrail =
+      s.textEnabled && s.textTrails > 0 && this.textHiddenFor <= s.textTrails * TRAIL_HALF_LIVES_TO_FADE;
+    const spiralTrail = s.trails > 0;
 
     gl.viewport(0, 0, width, height);
     gl.bindVertexArray(this.vao);
+    const S2 = s.s2Enabled ? 1 : 0;
 
-    if (!needsPost) {
-      if (!show) return;
+    if (!spiralTrail && !textTrail) {
+      // Nothing to keep between frames: one pass straight to the screen.
       this.historyValid = false;
       this.textHistoryValid = false;
+      if (!show) return;
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      this.drawScene(s, tl, width, height, pulse, true);
+      const prog = this.program('scene', { S2, FINISH: 1, TEXT_MODE: textOn ? TEXT_MODE.texture : TEXT_MODE.none });
+      this.setScene(prog, s, tl, width, height);
+      this.setFinish(prog, s, pulse, text, this.text.texture);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
       return;
     }
 
     this.ensureTargets(width, height);
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.sceneTarget!.framebuffer);
-    this.drawScene(s, tl, width, height, null, false);
-
-    const p = this.post;
-    gl.useProgram(p.program);
-    gl.uniform2f(p.loc('uResolution'), width, height);
-    gl.uniform1i(p.loc('uSource'), 0);
-    gl.uniform1i(p.loc('uHistory'), 1);
+    this.setScene(this.program('scene', { S2, FINISH: 0, TEXT_MODE: TEXT_MODE.none }), s, tl, width, height);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     let present = this.sceneTarget!;
-    if (s.trails > 0) {
+    if (spiralTrail) {
       // Feedback: new afterimage = mix(scene, previous afterimage), written to the other buffer.
       const [prev, next] = this.history;
+      const p = this.program('post', { PASS: 0, TEXT_MODE: TEXT_MODE.none });
       gl.bindFramebuffer(gl.FRAMEBUFFER, next!.framebuffer);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.sceneTarget!.texture);
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, prev!.texture);
-      gl.uniform1i(p.loc('uPass'), 0);
-      gl.uniform1f(p.loc('uTrailMix'), this.historyValid ? trailMix : 0);
+      gl.uniform2f(p.loc('uResolution'), width, height);
+      gl.uniform1i(p.loc('uSource'), 0);
+      gl.uniform1i(p.loc('uHistory'), 1);
+      gl.uniform1f(p.loc('uTrailMix'), this.historyValid ? trailWeight(s.trails, dt) : 0);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       this.history = [next, prev];
       this.historyValid = true;
@@ -177,32 +233,25 @@ export class Renderer {
       this.historyValid = false;
     }
 
-    // Text layer: the current text over its own fading afterimage.
-    const text = textFrame(s, tl.time, tl.beatPhase);
-    gl.uniform1i(p.loc('uText'), 2);
-    if (s.textEnabled) {
-      const textOn = text.phrase !== '' && text.alpha > 0;
-      if (textOn) this.text.update(s, text, width, height);
-      const minRes = Math.min(width, height);
-      // A single phrase is drawn centred in its texture and moved here; a wall is drawn in place.
-      const anchor = [width / 2 + (s.textX * minRes) / 2, height / 2 + (s.textY * minRes) / 2];
-      const origin = isWall(s) ? anchor : [width / 2, height / 2];
+    let textMode: TextMode = textOn ? TEXT_MODE.texture : TEXT_MODE.none;
+    let textSource = this.text.texture;
+    if (textTrail) {
+      // Text layer: the current text over its own fading afterimage.
       const [prev, next] = this.textHistory;
+      const p = this.program('post', { PASS: 2, TEXT_MODE: TEXT_MODE.none });
       gl.bindFramebuffer(gl.FRAMEBUFFER, next!.framebuffer);
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, prev!.texture);
-      gl.activeTexture(gl.TEXTURE2);
-      gl.bindTexture(gl.TEXTURE_2D, this.text.texture);
-      gl.uniform1i(p.loc('uPass'), 2);
+      gl.uniform2f(p.loc('uResolution'), width, height);
+      gl.uniform1i(p.loc('uHistory'), 1);
+      this.setFinish(p, s, pulse, text, this.text.texture);
       gl.uniform1f(p.loc('uTrailMix'), this.textHistoryValid ? trailWeight(s.textTrails, dt) : 0);
       gl.uniform1f(p.loc('uTextAlpha'), textOn ? text.alpha : 0);
-      gl.uniform1f(p.loc('uTextScale'), text.scale);
-      gl.uniform2fv(p.loc('uTextAnchor'), anchor);
-      gl.uniform2fv(p.loc('uTextOrigin'), origin);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       this.textHistory = [next, prev];
       this.textHistoryValid = true;
-      gl.bindTexture(gl.TEXTURE_2D, next!.texture); // unit 2 now holds the layer, for the final pass
+      textMode = TEXT_MODE.layer;
+      textSource = next!.texture;
     } else {
       this.textHistoryValid = false;
     }
@@ -210,27 +259,52 @@ export class Renderer {
     if (!show) return;
 
     // Final: vignette, text, pulses and dither to the screen.
+    const p = this.program('post', { PASS: 1, TEXT_MODE: textMode });
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, present.texture);
-    gl.uniform1i(p.loc('uPass'), 1);
-    gl.uniform1f(p.loc('uVignette'), s.vignette);
-    gl.uniform1f(p.loc('uVignetteSize'), s.vignetteSize);
-    gl.uniform3fv(p.loc('uVignetteColor'), hexToRgb(s.vignetteColor));
-    gl.uniform1i(p.loc('uTextOn'), s.textEnabled ? 1 : 0);
-    gl.uniform1f(p.loc('uInvert'), pulse.invert);
-    gl.uniform1f(p.loc('uFlash'), pulse.flash);
-    gl.uniform3fv(p.loc('uFlashColor'), hexToRgb(s.flashColor));
-    gl.uniform1f(p.loc('uTextFlash'), text.flash);
-    gl.uniform3fv(p.loc('uTextFlashColor'), hexToRgb(s.textFlashColor));
+    gl.uniform2f(p.loc('uResolution'), width, height);
+    gl.uniform1i(p.loc('uSource'), 0);
+    this.setFinish(p, s, pulse, text, textSource);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
-  /** `pulse`: beat flash/inversion to apply here, or null when the final post pass applies them. */
-  private drawScene(s: Settings, tl: TimelineState, width: number, height: number, pulse: Pulses | null, dither: boolean): void {
+  /**
+   * Uniforms of the shared finishing step (finish.glsl) on `prog`, which must be in use:
+   * vignette, text placement, pulses, flashes and dither. Binds `textTexture` to unit 2.
+   */
+  private setFinish(prog: Program, s: Settings, pulse: Pulses, text: TextFrame, textTexture: WebGLTexture): void {
     const gl = this.gl;
-    const { loc, program } = this.scene;
-    gl.useProgram(program);
+    const { loc } = prog;
+    const { width, height } = this.canvas;
+    gl.uniform1f(loc('uVignette'), s.vignette);
+    gl.uniform1f(loc('uVignetteSize'), s.vignetteSize);
+    gl.uniform3fv(loc('uVignetteColor'), hexToRgb(s.vignetteColor));
+
+    const minRes = Math.min(width, height);
+    // A single phrase is drawn centred in its texture and moved here; a wall is drawn in place.
+    const anchor = [width / 2 + (s.textX * minRes) / 2, height / 2 + (s.textY * minRes) / 2];
+    const origin = isWall(s) ? anchor : [width / 2, height / 2];
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, textTexture);
+    gl.uniform1i(loc('uText'), 2);
+    gl.uniform1f(loc('uTextAlpha'), text.alpha);
+    gl.uniform1f(loc('uTextScale'), text.scale);
+    gl.uniform2fv(loc('uTextAnchor'), anchor);
+    gl.uniform2fv(loc('uTextOrigin'), origin);
+
+    gl.uniform1f(loc('uInvert'), pulse.invert);
+    gl.uniform1f(loc('uFlash'), pulse.flash);
+    gl.uniform3fv(loc('uFlashColor'), hexToRgb(s.flashColor));
+    gl.uniform1f(loc('uTextFlash'), text.flash);
+    gl.uniform3fv(loc('uTextFlashColor'), hexToRgb(s.textFlashColor));
+    gl.uniform1i(loc('uDither'), 1);
+  }
+
+  /** Sets the spiral uniforms on `prog`, a scene variant in use; the caller draws. */
+  private setScene(prog: Program, s: Settings, tl: TimelineState, width: number, height: number): void {
+    const gl = this.gl;
+    const { loc } = prog;
 
     // Bands: 0 = spiral 1 arms, 1 = spiral 1 gaps, 2 = spiral 2 arms.
     const bands = [s.armColors, s.gapColors, s.s2Colors].map((list) => list.map(hexToRgb));
@@ -282,18 +356,11 @@ export class Renderer {
     gl.uniform3fv(loc('uAvg1'), avg1);
     gl.uniform3fv(loc('uAvg2'), s2Avg);
 
-    gl.uniform1i(loc('uS2Enabled'), s.s2Enabled ? 1 : 0);
     gl.uniform1f(loc('uS2Opacity'), s.s2Opacity);
     gl.uniform1i(loc('uS2Blend'), BLENDS[s.s2Blend]);
 
 
     gl.uniform1f(loc('uHueShift'), s.hueRoll === 0 ? 0 : tl.huePhase * Math.PI * 2);
-    gl.uniform1f(loc('uFlash'), pulse?.flash ?? 0);
-    gl.uniform3fv(loc('uFlashColor'), hexToRgb(s.flashColor));
-    gl.uniform1f(loc('uInvert'), pulse?.invert ?? 0);
-    gl.uniform1i(loc('uDither'), dither ? 1 : 0);
-
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
   /**
