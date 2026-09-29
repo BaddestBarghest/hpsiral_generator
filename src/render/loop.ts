@@ -1,6 +1,6 @@
 import type { Settings } from '../settings/schema';
 import { LiveClock } from '../engine/clock';
-import { initialTimeline, step, type TimelineState } from '../engine/timeline';
+import { alignBeat, initialTimeline, step, type TimelineState } from '../engine/timeline';
 import { Renderer } from './Renderer';
 import type { AnyCanvas } from './gl';
 import type { Emit, Viewport } from './protocol';
@@ -52,6 +52,12 @@ export class RenderLoop {
   setPlaying(p: boolean): void {
     this.playing = p;
     this.clock.reset();
+  }
+
+  /** Makes this moment a beat (tap tempo), so beat effects line up with the taps. */
+  alignBeat(): void {
+    this.tl = alignBeat(this.tl);
+    this.dirty = true;
   }
 
   /** Freezes the live animation (e.g. during an offline render); resumes without a time jump. */

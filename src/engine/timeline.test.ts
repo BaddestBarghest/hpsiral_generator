@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaults } from '../settings/schema';
-import { COLOR_PERIOD, FLOW_PERIOD, initialTimeline, step, type TimelineState } from './timeline';
+import { alignBeat, COLOR_PERIOD, FLOW_PERIOD, initialTimeline, step, type TimelineState } from './timeline';
 import { LiveClock, MAX_LIVE_DT } from './clock';
 
 function run(dts: number[]): TimelineState {
@@ -82,5 +82,14 @@ describe('colour phases', () => {
     expect(tl.huePhase).toBeCloseTo(0.5);
     tl = step(tl, { ...rolling, hueRoll: 0, armShift: 0, gapShift: 0, s2Shift: 0 }, 1 / 60);
     expect([tl.huePhase, tl.armColorPhase, tl.gapColorPhase, tl.s2ColorPhase]).toEqual([0, 0, 0, 0]);
+  });
+});
+
+describe('tap tempo alignment', () => {
+  it('puts a beat at the current moment, moving by at most half a beat', () => {
+    const at = (beatPhase: number) => alignBeat({ ...initialTimeline(), beatPhase }).beatPhase;
+    expect(at(7.3)).toBe(7);
+    expect(at(7.6)).toBe(8);
+    expect(at(12)).toBe(12);
   });
 });

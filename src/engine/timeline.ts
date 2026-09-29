@@ -60,6 +60,14 @@ export function initialTimeline(): TimelineState {
 const colourPhase = (phase: number, speed: number, dt: number, period: number) =>
   speed === 0 ? 0 : wrap(phase + speed * dt, period);
 
+/**
+ * Puts a beat exactly at the current moment (the user just tapped one), moving the beat
+ * position by at most half a beat so everything beat-driven lines up with the taps.
+ */
+export function alignBeat(state: TimelineState): TimelineState {
+  return { ...state, beatPhase: Math.round(state.beatPhase) };
+}
+
 export function step(state: TimelineState, s: Settings, dt: number): TimelineState {
   const dir = s.direction === 'inward' ? 1 : -1;
   const dir2 = s.s2Direction === 'inward' ? 1 : -1;

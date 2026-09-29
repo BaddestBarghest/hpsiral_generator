@@ -10,8 +10,16 @@
     param,
     value,
     onchange,
+    onbeat,
     hint = null,
-  }: { param: Param; value: unknown; onchange: (v: unknown) => void; hint?: string | null } = $props();
+  }: {
+    param: Param;
+    value: unknown;
+    onchange: (v: unknown) => void;
+    /** Tap tempo: called on every tap, which marks a beat. */
+    onbeat?: () => void;
+    hint?: string | null;
+  } = $props();
 
   const id = $derived(`ctl-${param.key}`);
 
@@ -20,7 +28,8 @@
     return n.toFixed(decimals);
   }
 
-  // Tap tempo: BPM from the average gap between recent taps; a 2 s pause starts over.
+  // Tap tempo: BPM from the median gap between recent taps (one stray tap doesn't skew it);
+  // a 2 s pause starts over.
   const TAP_RESET_MS = 2000;
   const TAP_WINDOW = 6;
   let taps: number[] = [];
@@ -32,9 +41,12 @@
     if (taps.length && now - taps[taps.length - 1] > TAP_RESET_MS) taps = [];
     taps = [...taps, now].slice(-TAP_WINDOW);
     tapCount = taps.length;
+    onbeat?.(); // each tap is a beat: line the beat up with it
     if (taps.length < 2) return;
-    const avgGap = (taps[taps.length - 1] - taps[0]) / (taps.length - 1);
-    onchange(Math.min(param.max, Math.max(param.min, Math.round(60000 / avgGap))));
+    const gaps = taps.slice(1).map((t, i) => t - taps[i]).sort((a, b) => a - b);
+    const mid = gaps.length >> 1;
+    const gap = gaps.length % 2 ? gaps[mid] : (gaps[mid - 1] + gaps[mid]) / 2;
+    onchange(Math.min(param.max, Math.max(param.min, Math.round(60000 / gap))));
   }
 
   // Index of the colour whose editor is open (0 for single-colour params), or null.

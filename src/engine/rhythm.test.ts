@@ -60,10 +60,11 @@ describe('pulses', () => {
     expect(pulses(s, 2).flash).toBeCloseTo(0.8);
     expect(pulses(s, 2.5).flash).toBeLessThan(0.05);
   });
-  it('breathes the zoom smoothly', () => {
+  it('breathes the zoom smoothly, biggest on the beat', () => {
     const s: Settings = { ...defaults(), zoomPulse: 0.2, zoomPulseRate: '2' };
-    expect(pulses(s, 0).zoom).toBeCloseTo(1);
-    expect(pulses(s, 1).zoom).toBeCloseTo(1.2);
+    expect(pulses(s, 0).zoom).toBeCloseTo(1.2);
+    expect(pulses(s, 1).zoom).toBeCloseTo(1);
+    expect(pulses(s, 2).zoom).toBeCloseTo(1.2);
   });
   it('is inert by default', () => {
     expect(pulses(defaults(), 1.23)).toEqual({ flash: 0, invert: 0, zoom: 1 });

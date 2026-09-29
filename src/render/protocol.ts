@@ -13,6 +13,7 @@ export type ToRender =
   | { type: 'settings'; settings: Settings }
   | { type: 'viewport'; viewport: Viewport }
   | { type: 'playing'; playing: boolean }
+  | { type: 'alignBeat' }
   /** `output`: stream to write the file into (transferred); omitted = return the bytes. */
   | { type: 'render'; job: RenderJob; output?: WritableStream }
   | { type: 'cancelRender' };

@@ -18,11 +18,14 @@
     width = $bindable(400),
     settings,
     onreset,
+    onbeat,
   }: {
     open: boolean;
     width?: number;
     settings: Settings;
     onreset: () => void;
+    /** Tap tempo marked a beat. */
+    onbeat: () => void;
   } = $props();
 
   const params = schema as readonly Param[];
@@ -67,6 +70,7 @@
               value={settings[p.key as keyof Settings]}
               hint={hintFor(p.key, settings)}
               onchange={(v) => set(p.key, v)}
+              {onbeat}
             />
           {/each}
         </div>

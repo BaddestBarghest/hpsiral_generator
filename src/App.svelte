@@ -341,7 +341,7 @@
     </Button>
   </div>
 
-  <Sidebar bind:open={drawerOpen} bind:width={drawerWidth} {settings} onreset={resetSettings} />
+  <Sidebar bind:open={drawerOpen} bind:width={drawerWidth} {settings} onreset={resetSettings} onbeat={() => host?.alignBeat()} />
   <ExportPanel
     bind:open={exportOpen}
     bind:width={drawerWidth}

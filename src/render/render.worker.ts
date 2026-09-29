@@ -27,6 +27,9 @@ self.onmessage = (e: MessageEvent<ToRender>) => {
       case 'playing':
         loop?.setPlaying(msg.playing);
         break;
+      case 'alignBeat':
+        loop?.alignBeat();
+        break;
       case 'render':
         void task?.start(msg.job, msg.output);
         break;

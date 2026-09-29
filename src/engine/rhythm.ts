@@ -78,8 +78,9 @@ export function pulses(s: Settings, beats: number): Pulses {
   }
   let zoom = 1;
   if (s.zoomPulse > 0) {
+    // Biggest on the beat (like the flashes), easing back in between.
     const u = fract(beats / Number(s.zoomPulseRate));
-    zoom = 1 + s.zoomPulse * (0.5 - 0.5 * Math.cos(2 * Math.PI * u));
+    zoom = 1 + s.zoomPulse * (0.5 + 0.5 * Math.cos(2 * Math.PI * u));
   }
   return { flash, invert, zoom };
 }

@@ -10,6 +10,8 @@ export interface RenderHost {
   setSettings(s: Settings): void;
   setViewport(v: Viewport): void;
   setPlaying(p: boolean): void;
+  /** Makes this moment a beat (tap tempo). */
+  alignBeat(): void;
   /** Starts an offline render; progress and the result arrive through `onEvent`. */
   startRender(job: RenderJob, output?: WritableStream): void;
   cancelRender(): void;
@@ -44,6 +46,7 @@ export function createRenderHost(canvas: HTMLCanvasElement, init: HostInit): Ren
       setSettings: (settings) => post({ type: 'settings', settings }),
       setViewport: (viewport) => post({ type: 'viewport', viewport }),
       setPlaying: (playing) => post({ type: 'playing', playing }),
+      alignBeat: () => post({ type: 'alignBeat' }),
       startRender: (job, output) => post({ type: 'render', job, output }, output ? [output] : []),
       cancelRender: () => post({ type: 'cancelRender' }),
       destroy: () => worker.terminate(),
@@ -58,6 +61,7 @@ export function createRenderHost(canvas: HTMLCanvasElement, init: HostInit): Ren
     setSettings: (s) => loop.setSettings(s),
     setViewport: (v) => loop.setViewport(v),
     setPlaying: (p) => loop.setPlaying(p),
+    alignBeat: () => loop.alignBeat(),
     startRender: (job, output) => void task.start(job, output),
     cancelRender: () => task.cancel(),
     destroy: () => loop.destroy(),
