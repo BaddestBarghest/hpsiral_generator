@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaults, isVisible, migrate, sanitize, schema, type Param } from './schema';
+import { defaults, fromSlider, isVisible, migrate, sanitize, schema, SLIDER_RESOLUTION, toSlider, type Param, type RangeParam } from './schema';
 
 describe('schema', () => {
   it('has unique keys', () => {
@@ -76,5 +76,36 @@ describe('schema', () => {
   it('survives non-object input', () => {
     expect(sanitize(null)).toEqual(defaults());
     expect(sanitize('garbage')).toEqual(defaults());
+  });
+
+  describe('curved sliders', () => {
+    const curved = (schema as readonly Param[]).filter((p): p is RangeParam => p.type === 'range' && !!p.curve);
+    const zoom = curved.find((p) => p.key === 'zoom')!;
+
+    it('reaches both ends of the range', () => {
+      for (const p of curved) {
+        expect(fromSlider(p, 0)).toBe(p.min);
+        expect(fromSlider(p, SLIDER_RESOLUTION)).toBe(p.max);
+      }
+    });
+
+    it('snaps values to the step', () => {
+      for (const p of curved) {
+        for (let pos = 0; pos <= SLIDER_RESOLUTION; pos += 37) {
+          const steps = fromSlider(p, pos) / p.step;
+          expect(Math.abs(steps - Math.round(steps))).toBeLessThan(1e-6);
+        }
+      }
+    });
+
+    it('round-trips values through the slider position', () => {
+      for (const p of curved) {
+        expect(fromSlider(p, toSlider(p, p.default))).toBeCloseTo(p.default, 1);
+      }
+    });
+
+    it('puts 1× zoom in the middle of a log slider', () => {
+      expect(toSlider(zoom, 1)).toBe(SLIDER_RESOLUTION / 2);
+    });
   });
 });

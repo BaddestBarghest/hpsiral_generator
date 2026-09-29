@@ -4,7 +4,7 @@ import { initialTimeline, step } from '../engine/timeline';
 import { Renderer } from '../render/Renderer';
 import { frameCount, type RenderJob } from './renderJob';
 import { RenderCancelled } from './renderErrors';
-import { warmUp } from './warmup';
+import { advance, subSteps, warmUp } from './warmup';
 import { ensureTextFont } from '../render/fontLoader';
 
 const PALETTE_SAMPLES = 8;
@@ -27,7 +27,7 @@ export async function renderGif(
   renderer.resize(width, height);
   const pixels = new Uint8Array(width * height * 4);
   const total = frameCount(job);
-  const dt = 1 / job.fps;
+  const trailDt = 1 / (job.fps * subSteps(settings, job.fps));
   const delayMs = Math.round(100 / job.fps) * 10; // GIF stores hundredths of a second
 
   try {
@@ -41,7 +41,7 @@ export async function renderGif(
     let lastReport = 0;
     for (let i = 0; i < total; i++) {
       if (signal.aborted) throw new RenderCancelled();
-      renderer.draw(settings, tl, dt);
+      renderer.draw(settings, tl, trailDt);
       renderer.readPixels(pixels);
       const palette = sharedPalette ?? quantize(pixels, 256);
       const index = applyPalette(pixels, palette);
@@ -53,7 +53,7 @@ export async function renderGif(
         height,
         i === 0 ? { palette, delay: delayMs, repeat: 0 } : sharedPalette ? { delay: delayMs } : { palette, delay: delayMs },
       );
-      tl = step(tl, settings, dt);
+      tl = advance(renderer, settings, tl, job.fps);
       const now = performance.now();
       if (now - lastReport > 100 || i === total - 1) {
         onProgress(i + 1, total);

@@ -48,6 +48,10 @@ const MAX_FLASHES_PER_SECOND = 3;
 export interface TextFrame {
   /** Phrase to show, or '' when nothing is on screen. */
   phrase: string;
+  /** The next phrase in order; alternates with `phrase` in the "alternating" wall. */
+  alt: string;
+  /** Index of the current phrase slot; the wall rearranges itself each slot. */
+  slot: number;
   /** 0..1 */
   alpha: number;
   /** Scale about the text's centre (animation). */
@@ -58,7 +62,9 @@ export interface TextFrame {
   flashCapped: boolean;
 }
 
-const NONE: TextFrame = { phrase: '', alpha: 0, scale: 1, flash: 0, flashCapped: false };
+const NONE: TextFrame = { phrase: '', alt: '', slot: 0, alpha: 0, scale: 1, flash: 0, flashCapped: false };
+
+export const isWall = (s: Settings) => s.textLayout !== 'single';
 
 /**
  * What text shows at timeline time `seconds` / beat position `beats`.
@@ -84,8 +90,11 @@ export function textFrame(s: Settings, seconds: number, beats: number): TextFram
   if (age >= duration) return { ...NONE, flash, flashCapped };
 
   const order = phraseOrder(s, phrases.length);
-  let phrase = phrases[order[((slot % phrases.length) + phrases.length) % phrases.length]];
-  if (s.textUppercase) phrase = phrase.toUpperCase();
+  const at = (i: number) => {
+    const p = phrases[order[((i % phrases.length) + phrases.length) % phrases.length]];
+    return s.textUppercase ? p.toUpperCase() : p;
+  };
+  const phrase = at(slot);
 
   const progress = age / duration;
   // Fades take a quarter of the time on screen, at most 0.4 s each way.
@@ -99,12 +108,13 @@ export function textFrame(s: Settings, seconds: number, beats: number): TextFram
       break;
     case 'zoom':
       alpha = fadeEnv;
-      scale = 0.85 + 0.15 * progress;
+      // A wall fills the screen, so it zooms in rather than out (shrinking would bare the edges).
+      scale = isWall(s) ? 1 + 0.15 * progress : 0.85 + 0.15 * progress;
       break;
     case 'pop':
       alpha = Math.min(1, (duration - age) / Math.min(0.1 * duration, 0.2));
       scale = 1 + 0.25 * Math.exp(-age / 0.08);
       break;
   }
-  return { phrase, alpha: Math.max(0, alpha) * s.textOpacity, scale, flash, flashCapped };
+  return { phrase, alt: at(slot + 1), slot, alpha: Math.max(0, alpha) * s.textOpacity, scale, flash, flashCapped };
 }

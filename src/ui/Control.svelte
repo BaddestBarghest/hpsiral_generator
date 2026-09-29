@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Button, Helper, Label, Range, Select, Textarea, Toggle } from 'flowbite-svelte';
-  import { CloseOutline, PlusOutline } from 'flowbite-svelte-icons';
-  import type { Param } from '../settings/schema';
+  import { CloseOutline, PlusOutline, UndoOutline } from 'flowbite-svelte-icons';
+  import { fromSlider, SLIDER_RESOLUTION, toSlider, type Param } from '../settings/schema';
   import ColorEditor from './color/ColorEditor.svelte';
   import FontPicker from './FontPicker.svelte';
   import type { FontId } from '../settings/fonts';
@@ -69,6 +69,16 @@
       <Label for={id} class="text-sm">{param.label}</Label>
       <div class="flex items-center gap-2">
         <span class="text-xs tabular-nums text-gray-400">{fmt(value as number, param.step)}{param.unit ? ` ${param.unit}` : ''}</span>
+        <!-- Always takes its space (hidden at the default) so the row doesn't shift. -->
+        <button
+          type="button"
+          class="rounded p-0.5 text-gray-400 hover:bg-gray-700 hover:text-white {value === param.default ? 'invisible' : ''}"
+          onclick={() => onchange(param.default)}
+          title={`Reset to ${fmt(param.default, param.step)}${param.unit ? ` ${param.unit}` : ''}`}
+          aria-label={`Reset ${param.label}`}
+        >
+          <UndoOutline class="h-3.5 w-3.5" />
+        </button>
         {#if param.tapTempo}
           <Button
             size="xs"
@@ -83,15 +93,27 @@
         {/if}
       </div>
     </div>
-    <Range
-      {id}
-      size="sm"
-      min={param.min}
-      max={param.max}
-      step={param.step}
-      value={value as number}
-      oninput={(e) => onchange(Number(e.currentTarget.value))}
-    />
+    {#if param.curve}
+      <Range
+        {id}
+        size="sm"
+        min={0}
+        max={SLIDER_RESOLUTION}
+        step={1}
+        value={toSlider(param, value as number)}
+        oninput={(e) => onchange(fromSlider(param, Number(e.currentTarget.value)))}
+      />
+    {:else}
+      <Range
+        {id}
+        size="sm"
+        min={param.min}
+        max={param.max}
+        step={param.step}
+        value={value as number}
+        oninput={(e) => onchange(Number(e.currentTarget.value))}
+      />
+    {/if}
   {:else if param.type === 'select' && param.picker === 'font'}
     <Label for={id} class="text-sm">{param.label}</Label>
     <FontPicker {id} value={value as FontId} onchange={(v) => onchange(v)} />

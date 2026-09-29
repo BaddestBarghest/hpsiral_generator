@@ -10,11 +10,10 @@ import {
   WebMOutputFormat,
   type Target,
 } from 'mediabunny';
-import { step } from '../engine/timeline';
 import { Renderer } from '../render/Renderer';
 import { frameCount, type RenderJob, type VideoCodec } from './renderJob';
 import { RenderCancelled } from './renderErrors';
-import { warmUp } from './warmup';
+import { advance, subSteps, warmUp } from './warmup';
 import { ensureTextFont } from '../render/fontLoader';
 
 /** Which codecs this browser can encode at the given size/rate. */
@@ -60,6 +59,7 @@ export async function renderOffline(
 
   const total = frameCount(job);
   const dt = 1 / job.fps;
+  const trailDt = dt / subSteps(job.settings, job.fps);
   try {
     await ensureTextFont(job.settings);
     await muxer.start();
@@ -67,9 +67,9 @@ export async function renderOffline(
     let lastReport = 0;
     for (let i = 0; i < total; i++) {
       if (signal.aborted) throw new RenderCancelled();
-      renderer.draw(job.settings, tl, dt);
+      renderer.draw(job.settings, tl, trailDt);
       await source.add(i * dt, dt); // captures the canvas synchronously, then waits for encoder backpressure
-      tl = step(tl, job.settings, dt);
+      tl = advance(renderer, job.settings, tl, job.fps);
       const now = performance.now();
       if (now - lastReport > 100 || i === total - 1) {
         onProgress(i + 1, total);

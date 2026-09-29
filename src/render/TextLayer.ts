@@ -1,14 +1,18 @@
 import type { Settings } from '../settings/schema';
+import { isWall, type TextFrame } from '../engine/text';
 import { canvasFont, fontWeight, isFontReady, loadFont } from './fontLoader';
 
 /** Wrapped lines may use this share of the screen width. */
 const MAX_LINE_WIDTH = 0.9;
 const LINE_HEIGHT = 1.15;
+/** Space between neighbouring phrases in a wall at density 1, in font sizes. */
+const WALL_GAP = 0.8;
 
 /**
- * Renders the current phrase with Canvas 2D (an OffscreenCanvas, so it works in the render
- * worker) and keeps it in a premultiplied-alpha texture. It only redraws when the phrase,
- * style or size changes; fading, zooming and positioning happen in the shader.
+ * Renders the current phrase (or a wall of them) with Canvas 2D (an OffscreenCanvas, so it
+ * works in the render worker) and keeps it in a premultiplied-alpha texture. It only redraws
+ * when the text, style or size changes; fading and zooming happen in the shader. A single
+ * phrase is drawn centred and positioned by the shader; a wall is drawn in place.
  */
 export class TextLayer {
   private canvas = new OffscreenCanvas(1, 1);
@@ -31,8 +35,9 @@ export class TextLayer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   }
 
-  /** Makes sure the texture shows `phrase` at the given size; cheap when nothing changed. */
-  update(s: Settings, phrase: string, width: number, height: number): void {
+  /** Makes sure the texture shows `text` at the given size; cheap when nothing changed. */
+  update(s: Settings, text: TextFrame, width: number, height: number): void {
+    const { phrase } = text;
     if (!phrase) return;
     const weight = fontWeight(s.textFont, s.textBold);
     const ready = isFontReady(s.textFont, weight);
@@ -43,10 +48,14 @@ export class TextLayer {
         this.onFontReady();
       });
     }
-    const key = JSON.stringify([ready, phrase, s.textFont, weight, s.textSize, s.textColor, s.textOutline, s.textOutlineColor, width, height]);
+    const wall = isWall(s);
+    const layout = wall ? [s.textLayout, text.slot, s.textLayout === 'wallAlt' ? text.alt : '', s.textX, s.textY, s.textWallDensity] : [];
+    const key = JSON.stringify([ready, phrase, s.textFont, weight, s.textSize, s.textColor, s.textOutline, s.textOutlineColor, width, height, layout]);
     if (key === this.key) return;
     this.key = key;
-    this.draw(s, phrase, width, height);
+    this.prepare(s, width, height);
+    if (wall) this.drawWall(s, text, width, height);
+    else this.drawSingle(s, phrase, width, height);
     const gl = this.gl;
     gl.bindTexture(gl.TEXTURE_2D, this.texture);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
@@ -54,31 +63,79 @@ export class TextLayer {
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
   }
 
-  private draw(s: Settings, phrase: string, width: number, height: number): void {
+  private fontPx = 0;
+
+  private prepare(s: Settings, width: number, height: number): void {
     const { canvas, ctx } = this;
     if (canvas.width !== width) canvas.width = width;
     if (canvas.height !== height) canvas.height = height;
     ctx.clearRect(0, 0, width, height);
 
-    const fontPx = Math.max(4, s.textSize * Math.min(width, height));
-    ctx.font = canvasFont(s.textFont, fontWeight(s.textFont, s.textBold), fontPx);
+    this.fontPx = Math.max(4, s.textSize * Math.min(width, height));
+    ctx.font = canvasFont(s.textFont, fontWeight(s.textFont, s.textBold), this.fontPx);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.lineJoin = 'round';
+  }
 
-    const lines = wrap(ctx, phrase, width * MAX_LINE_WIDTH);
-    const lineStep = fontPx * LINE_HEIGHT;
+  private drawText(s: Settings, text: string, x: number, y: number): void {
+    const { ctx } = this;
+    if (s.textOutline > 0) {
+      // The stroke is centred on the glyph edge, so double it for the visible outline.
+      ctx.lineWidth = s.textOutline * this.fontPx * 2;
+      ctx.strokeStyle = s.textOutlineColor;
+      ctx.strokeText(text, x, y);
+    }
+    ctx.fillStyle = s.textColor;
+    ctx.fillText(text, x, y);
+  }
+
+  /** One phrase, word-wrapped and centred on the canvas. */
+  private drawSingle(s: Settings, phrase: string, width: number, height: number): void {
+    const lines = wrap(this.ctx, phrase, width * MAX_LINE_WIDTH);
+    const lineStep = this.fontPx * LINE_HEIGHT;
     const top = height / 2 - ((lines.length - 1) * lineStep) / 2;
-    for (let i = 0; i < lines.length; i++) {
-      const y = top + i * lineStep;
-      if (s.textOutline > 0) {
-        // The stroke is centred on the glyph edge, so double it for the visible outline.
-        ctx.lineWidth = s.textOutline * fontPx * 2;
-        ctx.strokeStyle = s.textOutlineColor;
-        ctx.strokeText(lines[i], width / 2, y);
+    for (let i = 0; i < lines.length; i++) this.drawText(s, lines[i], width / 2, top + i * lineStep);
+  }
+
+  /**
+   * Rows of the phrase (or of two alternating phrases) filling the screen. The row through
+   * the anchor point always has a phrase centred on it; the other rows get a new sideways
+   * offset every slot, so the wall rearranges itself each time a phrase appears.
+   */
+  private drawWall(s: Settings, text: TextFrame, width: number, height: number): void {
+    const words = s.textLayout === 'wallAlt' && text.alt !== text.phrase ? [text.phrase, text.alt] : [text.phrase];
+    const widths = words.map((w) => this.ctx.measureText(w).width);
+    // Density 1 packs rows a line apart; lower spreads phrases and rows out, higher squeezes them.
+    const spread = 1 / s.textWallDensity;
+    const gap = this.fontPx * WALL_GAP * spread;
+    const rowStep = this.fontPx * (LINE_HEIGHT + spread - 1);
+    const minRes = Math.min(width, height);
+    const ax = width / 2 + (s.textX * minRes) / 2;
+    const ay = height / 2 - (s.textY * minRes) / 2;
+    const cell = widths[0] + gap;
+
+    const firstRow = -Math.ceil(ay / rowStep) - 1;
+    const lastRow = Math.ceil((height - ay) / rowStep) + 1;
+    for (let r = firstRow; r <= lastRow; r++) {
+      const y = ay + r * rowStep;
+      const cx0 = ax + (r === 0 ? 0 : hash01(text.slot, r) * cell);
+      const wordAt = (j: number) => ((j + r) % words.length + words.length) % words.length;
+      // Centre cell, then outwards to the right and to the left.
+      let k = wordAt(0);
+      this.drawText(s, words[k], cx0, y);
+      let right = cx0 + widths[k] / 2;
+      for (let j = 1; right + gap < width; j++) {
+        k = wordAt(j);
+        this.drawText(s, words[k], right + gap + widths[k] / 2, y);
+        right += gap + widths[k];
       }
-      ctx.fillStyle = s.textColor;
-      ctx.fillText(lines[i], width / 2, y);
+      let left = cx0 - widths[wordAt(0)] / 2;
+      for (let j = -1; left - gap > 0; j--) {
+        k = wordAt(j);
+        this.drawText(s, words[k], left - gap - widths[k] / 2, y);
+        left -= gap + widths[k];
+      }
     }
   }
 
@@ -102,4 +159,12 @@ function wrap(ctx: OffscreenCanvasRenderingContext2D, text: string, maxWidth: nu
   }
   if (line) lines.push(line);
   return lines;
+}
+
+/** Deterministic pseudo-random number in [0, 1) for a (slot, row) pair. */
+function hash01(slot: number, row: number): number {
+  let h = Math.imul(slot ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(row + 0x632be5ab, 0xc2b2ae35);
+  h = Math.imul(h ^ (h >>> 16), 0x7feb352d);
+  h = Math.imul(h ^ (h >>> 15), 0x846ca68b);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }

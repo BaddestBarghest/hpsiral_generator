@@ -79,3 +79,18 @@ describe('textFrame', () => {
     expect(textFrame(text({ textPhrases: '  \n ' }), 0.5, 0).phrase).toBe('');
   });
 });
+
+describe('wall of text', () => {
+  it('pairs each phrase with the next one for the alternating wall', () => {
+    const s = text({ textLayout: 'wallAlt' });
+    expect(textFrame(s, 0.5, 0)).toMatchObject({ phrase: 'one', alt: 'two', slot: 0 });
+    expect(textFrame(s, 4.5, 0)).toMatchObject({ phrase: 'three', alt: 'one', slot: 2 });
+  });
+
+  it('zooms in rather than out, so the wall always covers the screen', () => {
+    const wall = text({ textLayout: 'wall', textAnimation: 'zoom' });
+    const single = text({ textAnimation: 'zoom' });
+    expect(textFrame(wall, 0.1, 0).scale).toBeGreaterThanOrEqual(1);
+    expect(textFrame(single, 0.1, 0).scale).toBeLessThan(1);
+  });
+});
