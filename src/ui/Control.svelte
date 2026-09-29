@@ -6,7 +6,12 @@
   import FontPicker from './FontPicker.svelte';
   import type { FontId } from '../settings/fonts';
 
-  let { param, value, onchange }: { param: Param; value: unknown; onchange: (v: unknown) => void } = $props();
+  let {
+    param,
+    value,
+    onchange,
+    hint = null,
+  }: { param: Param; value: unknown; onchange: (v: unknown) => void; hint?: string | null } = $props();
 
   const id = $derived(`ctl-${param.key}`);
 
@@ -169,7 +174,9 @@
       <ColorEditor value={colors[editing]} onchange={(c) => setColor(editing!, c)} onclose={() => (editing = null)} />
     {/if}
   {/if}
-  {#if param.help}
+  {#if hint}
+    <p class="flex gap-1.5 text-xs text-amber-300" role="status"><span aria-hidden="true">⚠</span><span>{hint}</span></p>
+  {:else if param.help}
     <Helper class="text-xs">{param.help}</Helper>
   {/if}
 </div>

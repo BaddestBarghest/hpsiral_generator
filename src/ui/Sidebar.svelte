@@ -4,6 +4,7 @@
   import { UndoOutline } from 'flowbite-svelte-icons';
   import { groups, isVisible, schema, type Param, type Settings } from '../settings/schema';
   import Control from './Control.svelte';
+  import { autoShiftFor, hintFor } from './hints';
 
   let {
     open = $bindable(),
@@ -27,7 +28,9 @@
   const inactiveTab = `${tabBase} border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-200`;
 
   function set(key: string, v: unknown) {
+    const extra = autoShiftFor(key, v, settings);
     (settings as Record<string, unknown>)[key] = v;
+    if (extra) Object.assign(settings, extra);
   }
 </script>
 
@@ -62,7 +65,12 @@
                 {p.section}
               </h3>
             {/if}
-            <Control param={p} value={settings[p.key as keyof Settings]} onchange={(v) => set(p.key, v)} />
+            <Control
+              param={p}
+              value={settings[p.key as keyof Settings]}
+              hint={hintFor(p.key, settings)}
+              onchange={(v) => set(p.key, v)}
+            />
           {/each}
           {#if group === 'Output'}
             {@render output()}
