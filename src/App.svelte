@@ -12,36 +12,36 @@
     VideoCameraSolid,
   } from 'flowbite-svelte-icons';
   import { settings, persistSettings, resetSettings } from './settings/store.svelte';
+  import { readStored, writeStored } from './storage';
   import { createRenderHost, type RenderHost } from './render/host';
   import type { FromRender, Viewport } from './render/protocol';
   import { LiveRecorder, supportedFormats, type RecordPrefs } from './record/liveRecorder';
   import { openFileSink, removeFile, saveBlob, timestampedName, type FileSink } from './record/save';
-  import { RENDER_FORMATS, type RenderRequest } from './record/renderJob';
+  import { frameCount, RENDER_FORMATS, type RenderRequest } from './record/renderJob';
   import Sidebar from './ui/Sidebar.svelte';
   import SafetyGate from './ui/SafetyGate.svelte';
   import RecordPanel from './ui/RecordPanel.svelte';
   import RenderPanel from './ui/RenderPanel.svelte';
   import RenderProgress from './ui/RenderProgress.svelte';
+  import SectionHeading from './ui/SectionHeading.svelte';
 
   const SAFETY_KEY = 'hypnogen:safety-ack:v1';
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  function readAck(): boolean {
-    try {
-      return localStorage.getItem(SAFETY_KEY) === '1';
-    } catch {
-      return false;
-    }
-  }
 
   let canvas: HTMLCanvasElement;
   let host: RenderHost | null = null;
 
-  let safetyAck = $state(readAck());
+  let safetyAck = $state(readStored(SAFETY_KEY) === '1');
   let userPlaying = $state(!reducedMotion);
   const playing = $derived(safetyAck && userPlaying);
 
   let drawerOpen = $state(false);
+  let drawerWidth = $state(400);
+  let toolbarWidth = $state(0);
+  let windowWidth = $state(innerWidth);
+  // Beside the open panel, but never pushed off the left edge by a very wide one.
+  const toolbarOffset = $derived(Math.max(12, Math.min(drawerWidth + 16, windowWidth - toolbarWidth - 12)));
   let uiHidden = $state(false);
   let isFullscreen = $state(false);
   let fps = $state(0);
@@ -52,7 +52,6 @@
   interface RenderState {
     frame: number;
     total: number;
-    startedAt: number;
     fileName: string;
     mimeType: string;
     cancelling: boolean;
@@ -126,27 +125,13 @@
    * so later renders skip the dialog and download directly instead of asking twice.
    */
   const DIRECT_DOWNLOAD_KEY = 'hypnogen:directDownload';
-  function pickerBlocked(): boolean {
-    try {
-      return localStorage.getItem(DIRECT_DOWNLOAD_KEY) === '1';
-    } catch {
-      return false;
-    }
-  }
-  function rememberPickerBlocked() {
-    try {
-      localStorage.setItem(DIRECT_DOWNLOAD_KEY, '1');
-    } catch {
-      /* storage unavailable: we'll just try the dialog again next time */
-    }
-  }
 
   async function beginRender(host: RenderHost, req: RenderRequest) {
     const format = RENDER_FORMATS[req.format];
     let fileName = timestampedName('hypno', format.ext);
     // Where supported, stream straight to a file on disk so long 4K renders don't fill memory.
     let sink: FileSink | null = null;
-    if (window.showSaveFilePicker && !pickerBlocked()) {
+    if (window.showSaveFilePicker && readStored(DIRECT_DOWNLOAD_KEY) !== '1') {
       let handle: FileSystemFileHandle | undefined;
       try {
         handle = await window.showSaveFilePicker({
@@ -165,14 +150,13 @@
           // The dialog already created an empty file there; don't leave it behind.
           await removeFile(handle);
           fileName = handle.name;
-          rememberPickerBlocked();
+          writeStored(DIRECT_DOWNLOAD_KEY, '1');
           console.warn('Writing to the chosen file failed; downloading instead.', e);
           error = `Your browser blocked saving to that folder, so ${handle.name} will download instead. Future renders download directly.`;
         }
       }
     }
-    const total = Math.max(1, Math.round(req.fps * req.duration));
-    rendering = { frame: 0, total, startedAt: performance.now(), fileName, mimeType: format.mimeType, cancelling: false };
+    rendering = { frame: 0, total: frameCount(req), fileName, mimeType: format.mimeType, cancelling: false };
     fileSink = sink;
     host.startRender({ ...req, settings: req.settings ?? $state.snapshot(settings) }, sink?.stream);
   }
@@ -229,11 +213,7 @@
 
   function acceptSafety() {
     safetyAck = true;
-    try {
-      localStorage.setItem(SAFETY_KEY, '1');
-    } catch {
-      /* storage unavailable */
-    }
+    writeStored(SAFETY_KEY, '1');
   }
 
   function toggleFullscreen() {
@@ -287,7 +267,11 @@
         uiHidden = !uiHidden;
         break;
       case 'c':
-        drawerOpen = !drawerOpen;
+        // The panel lives with the other controls, so bring those back if they're hidden.
+        if (uiHidden) {
+          uiHidden = false;
+          drawerOpen = true;
+        } else drawerOpen = !drawerOpen;
         break;
       case 'r':
         toggleRecording();
@@ -299,7 +283,7 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} />
+<svelte:window onkeydown={onKeydown} bind:innerWidth={windowWidth} />
 
 <canvas
   bind:this={canvas}
@@ -310,8 +294,12 @@
 ></canvas>
 
 {#if !uiHidden}
-  <!-- Shifts left of the open drawer (25rem wide) on screens wide enough to show both. -->
-  <div class="fixed top-3 right-3 z-10 flex items-center gap-2 transition-[right] duration-200 {drawerOpen ? 'sm:right-[26rem]' : ''}">
+  <!-- Shifts left of the open drawer (user-resizable) on screens wide enough to show both. -->
+  <div
+    class="fixed top-3 right-3 z-10 flex items-center gap-2 {drawerOpen ? 'sm:right-[var(--drawer-offset)]' : ''}"
+    style="--drawer-offset: {toolbarOffset}px"
+    bind:clientWidth={toolbarWidth}
+  >
     {#if recorder}
       <span class="flex items-center gap-1.5 rounded bg-red-600/90 px-2 py-1 text-xs font-medium text-white tabular-nums">
         <span class="h-2 w-2 animate-pulse rounded-full bg-white"></span>
@@ -338,11 +326,9 @@
     </Button>
   </div>
 
-  <Sidebar bind:open={drawerOpen} {settings} onreset={resetSettings}>
+  <Sidebar bind:open={drawerOpen} bind:width={drawerWidth} {settings} onreset={resetSettings}>
     {#snippet output()}
-      <h3 class="mb-4 mt-8 border-b border-gray-700 pb-1 text-xs font-semibold tracking-wider text-primary-500 uppercase">
-        Live recording
-      </h3>
+      <SectionHeading class="mt-8 mb-4">Live recording</SectionHeading>
       <RecordPanel
         bind:prefs={recordPrefs}
         {formats}
@@ -350,9 +336,7 @@
         elapsed={recordElapsed}
         ontoggle={toggleRecording}
       />
-      <h3 class="mt-8 mb-4 border-b border-gray-700 pb-1 text-xs font-semibold tracking-wider text-primary-500 uppercase">
-        Render to file
-      </h3>
+      <SectionHeading class="mt-8 mb-4">Render to file</SectionHeading>
       <RenderPanel busy={!!rendering || !!recorder || choosingFile} {settings} onrender={startRender} />
     {/snippet}
   </Sidebar>
@@ -376,7 +360,6 @@
   open={!!rendering}
   frame={rendering?.frame ?? 0}
   total={rendering?.total ?? 0}
-  startedAt={rendering?.startedAt ?? 0}
   fileName={rendering?.fileName ?? ''}
   cancelling={rendering?.cancelling ?? false}
   oncancel={cancelRender}

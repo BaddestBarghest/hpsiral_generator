@@ -200,7 +200,7 @@ export const schema = [
   { key: 'invertLength', label: 'Length', group: 'Rhythm', section: 'Inversion', type: 'range', min: 0.05, max: 0.5, step: 0.01, default: 0.15, showIf: { invertEnabled: ['true'] } },
   { key: 'zoomPulse', label: 'Amount', group: 'Rhythm', section: 'Zoom pulse', type: 'range', min: 0, max: 0.5, step: 0.01, default: 0, help: 'Gently "breathes" the zoom in time.' },
   { key: 'zoomPulseRate', label: 'Rate', group: 'Rhythm', section: 'Zoom pulse', type: 'select', default: '2', options: PULSE_RATES },
-  { key: 'flashUnlock', label: 'Allow more than 3 flashes per second', group: 'Rhythm', section: 'Safety', type: 'toggle', default: false, help: '⚠ Rapid flashing can trigger seizures. While off, flashes and inversions skip beats to stay at or below 3 per second.' },
+  { key: 'flashUnlock', label: 'Allow more than 3 flashes per second', group: 'Rhythm', section: 'Safety', type: 'toggle', default: false, help: '⚠ Rapid flashing can trigger seizures. While off, beat flashes, inversions and text flashes together stay at or below 3 per second: beat effects skip beats, and the text flash is dropped if it still doesn’t fit.' },
 
   // ── Text ──────────────────────────────────────────────────────────────
   // Timed phrases; see engine/text.ts.
@@ -244,7 +244,7 @@ export const schema = [
       { value: 'wallAlt', label: 'Wall: alternating phrases' },
     ],
   },
-  { key: 'textWallDensity', label: 'Wall density', group: 'Text', section: 'Style', type: 'range', min: 0.25, max: 1.3, step: 0.01, default: 1, curve: 'log', help: 'How closely the phrases are packed together.', showIf: { textEnabled: ['true'], textLayout: ['wall', 'wallAlt'] } },
+  { key: 'textWallDensity', label: 'Wall density', group: 'Text', section: 'Style', type: 'range', min: 0.5, max: 2, step: 0.01, default: 1, curve: 'log', help: 'How closely the phrases are packed together; 2 is as tight as they go without overlapping.', showIf: { textEnabled: ['true'], textLayout: ['wall', 'wallAlt'] } },
   { key: 'textFont', label: 'Font', group: 'Text', section: 'Style', type: 'select', picker: 'font', default: 'sans', options: FONT_OPTIONS, showIf: { textEnabled: ['true'] } },
   { key: 'textBold', label: 'Bold', group: 'Text', section: 'Style', type: 'toggle', default: true, showIf: { textEnabled: ['true'], textFont: BOLD_FONT_IDS } },
   { key: 'textUppercase', label: 'Uppercase', group: 'Text', section: 'Style', type: 'toggle', default: false, showIf: { textEnabled: ['true'] } },
@@ -256,7 +256,7 @@ export const schema = [
   { key: 'textOutline', label: 'Outline', group: 'Text', section: 'Style', type: 'range', min: 0, max: 0.3, step: 0.01, default: 0, help: 'Keeps text readable over the stripes.', showIf: { textEnabled: ['true'] } },
   { key: 'textOutlineColor', label: 'Outline colour', group: 'Text', section: 'Style', type: 'color', default: '#000000', showIf: { textEnabled: ['true'] } },
   { key: 'textTrails', label: 'Afterimage trails', group: 'Text', section: 'Afterimage', type: 'range', min: 0, max: 2, step: 0.01, default: 0, unit: 's', curve: 'sq', help: 'Fading echoes of the text only, separate from the spirals’ afterimage.', showIf: { textEnabled: ['true'] } },
-  { key: 'textFlash', label: 'Flash when text appears', group: 'Text', section: 'Flash', type: 'toggle', default: false, help: 'A short flash of the whole screen as each phrase appears. Limited to 3 per second unless unlocked in Rhythm → Safety.', showIf: { textEnabled: ['true'] } },
+  { key: 'textFlash', label: 'Flash when text appears', group: 'Text', section: 'Flash', type: 'toggle', default: false, help: 'A short flash of the whole screen as each phrase appears. Shares the 3-per-second safety limit with beat flashes and inversions (Rhythm → Safety).', showIf: { textEnabled: ['true'] } },
   { key: 'textFlashColor', label: 'Colour', group: 'Text', section: 'Flash', type: 'color', default: '#ffffff', showIf: { textEnabled: ['true'], textFlash: ['true'] } },
   { key: 'textFlashLength', label: 'Length', group: 'Text', section: 'Flash', type: 'range', min: 0.03, max: 0.5, step: 0.01, default: 0.12, unit: 's', showIf: { textEnabled: ['true'], textFlash: ['true'] } },
   { key: 'textFlashIntensity', label: 'Intensity', group: 'Text', section: 'Flash', type: 'range', min: 0, max: 1, step: 0.01, default: 0.7, showIf: { textEnabled: ['true'], textFlash: ['true'] } },
@@ -333,10 +333,23 @@ export function fromSlider(p: RangeParam, pos: number): number {
   return Math.min(p.max, Math.max(p.min, snapped));
 }
 
+/**
+ * Version stamped on saved settings, so a later change to what a setting means can convert
+ * old values in `migrate`. Unversioned saves count as version 1: they may predate or follow
+ * the 2026-09-29 change of `trails` to a half-life in seconds, so those values are kept as is.
+ */
+export const SETTINGS_VERSION = 2;
+
+/** Settings plus their version, as saved. */
+export function withVersion(s: Settings): Settings & { version: number } {
+  return { ...s, version: SETTINGS_VERSION };
+}
+
 /** Carries settings saved by older versions forward; run before `sanitize`. */
 export function migrate(input: unknown): unknown {
   if (!input || typeof input !== 'object') return input;
   const raw = input as Record<string, unknown>;
+  // Future conversions go here, keyed on `raw.version` (missing = 1), e.g. `if (version < 3) ...`.
   // ≤0.1: one `palette` of alternating bands → first colour paints the arms, second the gaps.
   if (Array.isArray(raw.palette) && !('armColors' in raw)) {
     const [arm, gap] = raw.palette as unknown[];
@@ -345,7 +358,8 @@ export function migrate(input: unknown): unknown {
   return raw;
 }
 
-const HEX = /^#[0-9a-f]{6}$/i;
+/** A `#rrggbb` colour (either case). */
+export const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
 /** Coerce arbitrary input (localStorage, imported JSON, URL) into valid Settings. Unknown keys are dropped. */
 export function sanitize(input: unknown): Settings {
@@ -367,12 +381,12 @@ export function sanitize(input: unknown): Settings {
         break;
       case 'palette':
         if (Array.isArray(v)) {
-          const colors = v.filter((c): c is string => typeof c === 'string' && HEX.test(c)).slice(0, p.maxColors);
+          const colors = v.filter((c): c is string => typeof c === 'string' && HEX_COLOR.test(c)).slice(0, p.maxColors);
           if (colors.length >= p.minColors) out[p.key] = colors.map((c) => c.toLowerCase());
         }
         break;
       case 'color':
-        if (typeof v === 'string' && HEX.test(v)) out[p.key] = v.toLowerCase();
+        if (typeof v === 'string' && HEX_COLOR.test(v)) out[p.key] = v.toLowerCase();
         break;
       case 'textarea':
         if (typeof v === 'string') out[p.key] = v.slice(0, p.maxLength);

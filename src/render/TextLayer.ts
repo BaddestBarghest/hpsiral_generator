@@ -5,8 +5,16 @@ import { canvasFont, fontWeight, isFontReady, loadFont } from './fontLoader';
 /** Wrapped lines may use this share of the screen width. */
 const MAX_LINE_WIDTH = 0.9;
 const LINE_HEIGHT = 1.15;
-/** Space between neighbouring phrases in a wall at density 1, in font sizes. */
-const WALL_GAP = 0.8;
+/**
+ * Wall spacing, in font sizes. At the densest setting (2) phrases and rows sit this far apart
+ * beyond the text's actual ink (outline included), so they never overlap; each step down in
+ * density adds the slack below (density 1 adds one of each, 0.5 adds three).
+ */
+const WALL_MIN_GAP = 0.15;
+const WALL_MIN_ROW_MARGIN = 0.08;
+const WALL_GAP_SLACK = 0.6;
+const WALL_ROW_SLACK = 0.3;
+const WALL_MAX_DENSITY = 2;
 
 /**
  * Renders the current phrase (or a wall of them) with Canvas 2D (an OffscreenCanvas, so it
@@ -106,10 +114,14 @@ export class TextLayer {
   private drawWall(s: Settings, text: TextFrame, width: number, height: number): void {
     const words = s.textLayout === 'wallAlt' && text.alt !== text.phrase ? [text.phrase, text.alt] : [text.phrase];
     const widths = words.map((w) => this.ctx.measureText(w).width);
-    // Density 1 packs rows a line apart; lower spreads phrases and rows out, higher squeezes them.
-    const spread = 1 / s.textWallDensity;
-    const gap = this.fontPx * WALL_GAP * spread;
-    const rowStep = this.fontPx * (LINE_HEIGHT + spread - 1);
+    // Spacing from the measured ink, so the densest setting is as tight as the text allows.
+    const metrics = words.map((w) => this.ctx.measureText(w));
+    const outline = 2 * s.textOutline * this.fontPx; // an outline reaches this much past each pair of facing edges
+    const inkHeight =
+      Math.max(...metrics.map((m) => m.actualBoundingBoxAscent)) + Math.max(...metrics.map((m) => m.actualBoundingBoxDescent));
+    const slack = WALL_MAX_DENSITY / s.textWallDensity - 1; // 0 at the densest, 1 at density 1
+    const gap = outline + this.fontPx * (WALL_MIN_GAP + WALL_GAP_SLACK * slack);
+    const rowStep = inkHeight + outline + this.fontPx * (WALL_MIN_ROW_MARGIN + WALL_ROW_SLACK * slack);
     const minRes = Math.min(width, height);
     const ax = width / 2 + (s.textX * minRes) / 2;
     const ay = height / 2 - (s.textY * minRes) / 2;

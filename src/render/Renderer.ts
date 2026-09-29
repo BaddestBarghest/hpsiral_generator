@@ -3,6 +3,7 @@ import { MAX_BAND_COLORS } from '../settings/schema';
 import { COLOR_PERIOD, type TimelineState } from '../engine/timeline';
 import { pulses, type Pulses } from '../engine/rhythm';
 import { isWall, textFrame } from '../engine/text';
+import { lcm } from '../engine/math';
 import { TextLayer } from './TextLayer';
 import { averageRgb, hexToRgb, type RGB } from './color';
 import {
@@ -22,8 +23,6 @@ const MODES = { archimedean: 0, logarithmic: 1, concentric: 2, power: 3 } as con
 const COLOR_MODES = { static: 0, gradient: 1, cycle: 2, kaleido: 3 } as const;
 const BLENDS = { normal: 0, add: 1, multiply: 2, screen: 3, difference: 4 } as const;
 
-const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
-const lcm = (a: number, b: number) => (a / gcd(a, b)) * b;
 
 /**
  * Weight of the previous afterimage for a frame lasting `dt` seconds. `trails` is the

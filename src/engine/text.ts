@@ -1,4 +1,5 @@
 import type { Settings } from '../settings/schema';
+import { flashPlan, textSlotSeconds } from './safety';
 
 /**
  * Timed text phrases. Like everything else, a pure function of the timeline, so live
@@ -11,6 +12,20 @@ export function phraseList(s: Settings): string[] {
     .split('\n')
     .map((l) => l.trim())
     .filter(Boolean);
+}
+
+/** A wall shows at least this many different arrangements before repeating. */
+const MIN_WALL_LAYOUTS = 4;
+
+/**
+ * Phrase slots after which the text looks exactly the same again (for seamless loops): one
+ * pass through the phrases, or for a wall enough whole passes to give MIN_WALL_LAYOUTS
+ * different arrangements (so even a single phrase keeps moving around).
+ */
+export function textCycleSlots(s: Settings): number {
+  const n = phraseList(s).length;
+  if (n === 0 || !isWall(s)) return n;
+  return n * Math.ceil(MIN_WALL_LAYOUTS / n);
 }
 
 /** Seconds per phrase slot when timed in seconds, or beats per slot when synced to the tempo. */
@@ -42,15 +57,12 @@ export function phraseOrder(s: Settings, count: number): number[] {
   return order;
 }
 
-/** WCAG 2.3.1 cap shared with the beat flashes. */
-const MAX_FLASHES_PER_SECOND = 3;
-
 export interface TextFrame {
   /** Phrase to show, or '' when nothing is on screen. */
   phrase: string;
   /** The next phrase in order; alternates with `phrase` in the "alternating" wall. */
   alt: string;
-  /** Index of the current phrase slot; the wall rearranges itself each slot. */
+  /** Position of the current slot within `textCycleSlots`; the wall arrangement follows it. */
   slot: number;
   /** 0..1 */
   alpha: number;
@@ -58,7 +70,7 @@ export interface TextFrame {
   scale: number;
   /** 0..1 strength of the "flash when text appears" pulse. */
   flash: number;
-  /** Whether the text flash is suppressed by the 3-per-second safety cap. */
+  /** Whether the text flash is suppressed by the shared 3-per-second safety limit. */
   flashCapped: boolean;
 }
 
@@ -74,16 +86,14 @@ export function textFrame(s: Settings, seconds: number, beats: number): TextFram
   const phrases = phraseList(s);
   if (phrases.length === 0) return NONE;
 
-  const bps = s.bpm / 60;
-  const slotBeats = textSlotBeats(s);
   // Everything below works in seconds; beat-synced slots convert via the tempo.
-  const interval = slotBeats > 0 ? slotBeats / bps : s.textInterval;
-  const t = slotBeats > 0 ? beats / bps : seconds;
+  const interval = textSlotSeconds(s);
+  const t = textSlotBeats(s) > 0 ? (beats * 60) / s.bpm : seconds;
   const slot = Math.floor(t / interval);
   const age = t - slot * interval;
   const duration = Math.min(s.textDuration, interval);
 
-  const flashCapped = !s.flashUnlock && 1 / interval > MAX_FLASHES_PER_SECOND;
+  const flashCapped = s.textFlash && !flashPlan(s).textFlash;
   const flash =
     s.textFlash && !flashCapped && age < s.textFlashLength ? (1 - age / s.textFlashLength) * s.textFlashIntensity : 0;
 
@@ -116,5 +126,6 @@ export function textFrame(s: Settings, seconds: number, beats: number): TextFram
       scale = 1 + 0.25 * Math.exp(-age / 0.08);
       break;
   }
-  return { phrase, alt: at(slot + 1), slot, alpha: Math.max(0, alpha) * s.textOpacity, scale, flash, flashCapped };
+  const cycle = textCycleSlots(s);
+  return { phrase, alt: at(slot + 1), slot: ((slot % cycle) + cycle) % cycle, alpha: Math.max(0, alpha) * s.textOpacity, scale, flash, flashCapped };
 }

@@ -1,14 +1,13 @@
 import type { Settings } from '../settings/schema';
 import { beatPeriod, beatsPerSecond, rampMean } from './rhythm';
-import { phraseList, textSlotBeats } from './text';
+import { lcm } from './math';
+import { textCycleSlots, textSlotBeats } from './text';
 
 /**
  * Seamless loops: every periodic motion must complete a whole number of cycles in the
  * clip, so the frame after the last one is identical to the first.
  */
 
-const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
-const lcm = (a: number, b: number) => (a / gcd(a, b)) * b;
 
 /**
  * Flow cycles after which the pattern looks identical. One cycle moves every stripe to
@@ -56,7 +55,7 @@ function motions(s: Settings): Motion[] {
   // average; over whole ramp cycles (guaranteed by the tempo motion) that is exact.
   const mean = rampMean(s);
   const beats = beatPeriod(s);
-  const phrases = phraseList(s).length;
+  const phrases = textCycleSlots(s);
   const all: Motion[] = [
     { key: 'speed', label: 'Speed', rate: s.speed * mean, period: flowPeriod(s), toSetting: (r) => r / mean },
     { key: 'hueRoll', label: 'Hue roll speed', rate: s.hueRoll, period: 1, toSetting: same },
@@ -69,7 +68,7 @@ function motions(s: Settings): Motion[] {
     { key: 'wobbleSpeed', label: 'Wobble speed', rate: s.wobble > 0 ? s.wobbleSpeed : 0, period: 1, toSetting: same },
     // Ramp cycles, beat pulses and beat-synced text all repeat every `beats` beats.
     { key: 'bpm', label: 'Tempo (BPM)', rate: beats > 0 ? beatsPerSecond(s) : 0, period: beats, toSetting: (r) => r * 60 },
-    // Text timed in seconds: one slot per `textInterval`; the sequence repeats after every phrase.
+    // Text timed in seconds: one slot per `textInterval`; it repeats after `textCycleSlots` slots.
     {
       key: 'textInterval',
       label: 'Text: change every (s)',

@@ -1,13 +1,12 @@
 import type { Settings } from '../settings/schema';
-import { phraseList, textSlotBeats } from './text';
+import { textCycleSlots, textSlotBeats } from './text';
+import { flashPlan } from './safety';
+import { fract, lcm } from './math';
 
 /**
  * Tempo-driven effects. Everything is a pure function of the beat position, so live
  * playback, offline renders and loops agree exactly.
  */
-
-/** WCAG 2.3.1: no more than three flashes in any one-second period. */
-export const MAX_SAFE_FLASHES_PER_SECOND = 3;
 
 export const beatsPerSecond = (s: Settings) => s.bpm / 60;
 
@@ -54,16 +53,6 @@ export function rampIntegral(s: Settings, beats0: number, beats1: number, dt: nu
 
 // ── Pulses ────────────────────────────────────────────────────────────────
 
-/**
- * Pulse period in beats, doubled until it flashes at most 3 times a second unless
- * the user unlocked faster flashing. Doubling keeps it on the beat grid.
- */
-export function flashPeriodBeats(s: Settings, rateBeats: number): number {
-  let p = rateBeats;
-  if (!s.flashUnlock) while (beatsPerSecond(s) / p > MAX_SAFE_FLASHES_PER_SECOND) p *= 2;
-  return p;
-}
-
 export interface Pulses {
   /** 0..1 mix towards the flash colour. */
   flash: number;
@@ -73,18 +62,18 @@ export interface Pulses {
   zoom: number;
 }
 
-const fract = (x: number) => x - Math.floor(x);
-
 export function pulses(s: Settings, beats: number): Pulses {
+  // Flashes and inversions share one safety budget (see engine/safety.ts).
+  const plan = flashPlan(s);
   let flash = 0;
   if (s.flashMode !== 'off') {
-    const u = fract(beats / flashPeriodBeats(s, Number(s.flashRate)));
+    const u = fract(beats / plan.flashBeats);
     const env = s.flashMode === 'strobe' ? (u < s.flashLength ? 1 : 0) : Math.exp(-u / Math.max(0.3 * s.flashLength, 0.01));
     flash = env * s.flashIntensity;
   }
   let invert = 0;
   if (s.invertEnabled) {
-    const u = fract(beats / flashPeriodBeats(s, Number(s.invertRate)));
+    const u = fract(beats / plan.invertBeats);
     invert = u < s.invertLength ? 1 : 0;
   }
   let zoom = 1;
@@ -101,16 +90,15 @@ export function pulses(s: Settings, beats: number): Pulses {
  */
 export function beatPeriod(s: Settings): number {
   const periods: number[] = [];
+  const plan = flashPlan(s);
   if (s.rampEnabled) periods.push(s.rampBeats);
-  if (s.flashMode !== 'off') periods.push(flashPeriodBeats(s, Number(s.flashRate)));
-  if (s.invertEnabled) periods.push(flashPeriodBeats(s, Number(s.invertRate)));
+  if (s.flashMode !== 'off') periods.push(plan.flashBeats);
+  if (s.invertEnabled) periods.push(plan.invertBeats);
   if (s.zoomPulse > 0) periods.push(Number(s.zoomPulseRate));
-  // Beat-synced text repeats once every phrase has had its slot.
-  const phrases = phraseList(s).length;
-  if (s.textEnabled && phrases > 0 && textSlotBeats(s) > 0) periods.push(textSlotBeats(s) * phrases);
+  // Beat-synced text repeats once its whole cycle (every phrase, or every wall layout) has shown.
+  const cycle = textCycleSlots(s);
+  if (s.textEnabled && cycle > 0 && textSlotBeats(s) > 0) periods.push(textSlotBeats(s) * cycle);
   if (periods.length === 0) return 0;
   // All periods are multiples of a quarter beat.
-  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
-  const quarters = periods.map((p) => Math.round(p * 4));
-  return quarters.reduce((a, b) => (a / gcd(a, b)) * b) / 4;
+  return periods.map((p) => Math.round(p * 4)).reduce(lcm) / 4;
 }

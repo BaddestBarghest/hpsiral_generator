@@ -1,5 +1,6 @@
 import type { Settings } from '../settings/schema';
 import { beatsPerSecond, rampIntegral } from './rhythm';
+import { wrap } from './math';
 
 /**
  * Flow phase wraps at lcm(1..16), so every arm count divides it and stripe indices
@@ -50,7 +51,6 @@ export function initialTimeline(): TimelineState {
   };
 }
 
-const wrap = (x: number, period: number) => x - Math.floor(x / period) * period;
 
 /**
  * Advances a colour phase; at speed 0 it returns to 0, so switching hue roll or a colour

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaults, type Settings } from '../settings/schema';
-import { beatPeriod, flashPeriodBeats, pulses, rampIntegral, rampMean, rampMultiplier } from './rhythm';
+import { beatPeriod, pulses, rampIntegral, rampMean, rampMultiplier } from './rhythm';
 import { initialTimeline, step } from './timeline';
 
 const ramp = (shape: 'smooth' | 'linear'): Settings => ({
@@ -46,18 +46,6 @@ describe('speed ramp', () => {
   it('is a no-op when disabled', () => {
     expect(rampIntegral(defaults(), 0, 5, 0.5)).toBe(0.5);
     expect(rampMean(defaults())).toBe(1);
-  });
-});
-
-describe('flash safety cap', () => {
-  it('keeps flashes at or below 3 per second by skipping beats', () => {
-    const s = { ...defaults(), bpm: 240 }; // 4 beats per second
-    expect(flashPeriodBeats(s, 0.25)).toBe(2); // 16/s → 8 → 4 → 2 flashes/s
-    expect(flashPeriodBeats(s, 1)).toBe(2);
-    expect(flashPeriodBeats({ ...s, bpm: 120 }, 1)).toBe(1); // 2/s is fine
-  });
-  it('can be unlocked explicitly', () => {
-    expect(flashPeriodBeats({ ...defaults(), bpm: 240, flashUnlock: true }, 0.25)).toBe(0.25);
   });
 });
 

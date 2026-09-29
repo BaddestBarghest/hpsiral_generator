@@ -5,7 +5,6 @@
     open,
     frame,
     total,
-    startedAt,
     fileName,
     cancelling,
     oncancel,
@@ -13,25 +12,33 @@
     open: boolean;
     frame: number;
     total: number;
-    startedAt: number;
     fileName: string;
     cancelling: boolean;
     oncancel: () => void;
   } = $props();
 
   const pct = $derived(total ? Math.floor((frame / total) * 100) : 0);
+  const title = $derived(fileName.toLowerCase().endsWith('.gif') ? 'Rendering GIF' : 'Rendering video');
+
+  // Time the estimate from the first progress report: before frame 1 the render is loading
+  // fonts and warming up afterimages, which would skew the rate.
+  let first = $state<{ frame: number; at: number } | null>(null);
+  $effect(() => {
+    if (!open) first = null;
+    else if (!first && frame > 0) first = { frame, at: performance.now() };
+  });
 
   function eta(): string {
-    if (frame < 2) return 'estimating…';
-    const elapsed = (performance.now() - startedAt) / 1000;
-    const remaining = (elapsed / frame) * (total - frame);
+    if (!first || frame - first.frame < 2) return 'estimating…';
+    const perFrame = (performance.now() - first.at) / 1000 / (frame - first.frame);
+    const remaining = Math.round(perFrame * (total - frame));
     const m = Math.floor(remaining / 60);
-    const s = Math.round(remaining % 60);
+    const s = remaining % 60;
     return m > 0 ? `${m} min ${s} s left` : `${s} s left`;
   }
 </script>
 
-<Modal title="Rendering video" {open} dismissable={false} permanent size="sm">
+<Modal {title} {open} dismissable={false} permanent size="sm">
   <div class="space-y-3">
     <p class="truncate text-sm text-gray-300" title={fileName}>{fileName}</p>
     <Progressbar progress={pct} size="h-2.5" animate={false} />

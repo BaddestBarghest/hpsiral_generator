@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaults, type Settings } from '../settings/schema';
-import { phraseList, phraseOrder, textFrame } from './text';
+import { phraseList, phraseOrder, textCycleSlots, textFrame } from './text';
 
 const text = (over: Partial<Settings> = {}): Settings => ({
   ...defaults(),
@@ -92,5 +92,21 @@ describe('wall of text', () => {
     const single = text({ textAnimation: 'zoom' });
     expect(textFrame(wall, 0.1, 0).scale).toBeGreaterThanOrEqual(1);
     expect(textFrame(single, 0.1, 0).scale).toBeLessThan(1);
+  });
+});
+
+describe('text cycle (seamless loops)', () => {
+  it('repeats after every phrase, or after enough wall layouts', () => {
+    expect(textCycleSlots(text())).toBe(3);
+    expect(textCycleSlots(text({ textLayout: 'wall' }))).toBe(6); // 3 phrases × 2 passes ≥ 4 layouts
+    expect(textCycleSlots(text({ textLayout: 'wall', textPhrases: 'only' }))).toBe(4);
+  });
+
+  it('gives the same wall arrangement one cycle later', () => {
+    const s = text({ textLayout: 'wall' }); // 2 s per slot, cycle of 6
+    const a = textFrame(s, 0.5, 0);
+    const b = textFrame(s, 0.5 + 6 * 2, 0);
+    expect(b).toEqual(a);
+    expect(textFrame(s, 2.5, 0).slot).not.toBe(a.slot);
   });
 });
