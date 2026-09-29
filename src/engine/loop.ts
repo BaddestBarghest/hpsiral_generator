@@ -60,11 +60,12 @@ function motions(s: Settings): Motion[] {
     { key: 'speed', label: 'Speed', rate: s.speed * mean, period: flowPeriod(s), toSetting: (r) => r / mean },
     { key: 'hueRoll', label: 'Hue roll speed', rate: s.hueRoll, period: 1, toSetting: same },
     // A single colour can't visibly shift, so it doesn't constrain the loop.
-    { key: 'armShift', label: 'Arm colour shift', rate: s.armColors.length > 1 ? s.armShift : 0, period: s.armColors.length, toSetting: same },
-    { key: 'gapShift', label: 'Gap colour shift', rate: s.gapColors.length > 1 ? s.gapShift : 0, period: s.gapColors.length, toSetting: same },
+    // With colour steps on the beat, colour shifts follow the tempo instead (see beatPeriod).
+    { key: 'armShift', label: 'Arm colour shift', rate: s.armColors.length > 1 && !s.colorStep ? s.armShift : 0, period: s.armColors.length, toSetting: same },
+    { key: 'gapShift', label: 'Gap colour shift', rate: s.gapColors.length > 1 && !s.colorStep ? s.gapShift : 0, period: s.gapColors.length, toSetting: same },
     // Hidden or invisible motions don't constrain the loop either.
     { key: 's2Speed', label: 'Auxiliary spiral speed', rate: s.s2Enabled ? s.s2Speed * mean : 0, period: flowPeriod2(s), toSetting: (r) => r / mean },
-    { key: 's2Shift', label: 'Auxiliary spiral colour shift', rate: s.s2Enabled && s.s2Colors.length > 1 ? s.s2Shift : 0, period: s.s2Colors.length, toSetting: same },
+    { key: 's2Shift', label: 'Auxiliary spiral colour shift', rate: s.s2Enabled && s.s2Colors.length > 1 && !s.colorStep ? s.s2Shift : 0, period: s.s2Colors.length, toSetting: same },
     { key: 'wobbleSpeed', label: 'Wobble speed', rate: s.wobble > 0 ? s.wobbleSpeed : 0, period: 1, toSetting: same },
     // Ramp cycles, beat pulses and beat-synced text all repeat every `beats` beats.
     { key: 'bpm', label: 'Tempo (BPM)', rate: beats > 0 ? beatsPerSecond(s) : 0, period: beats, toSetting: (r) => r * 60 },

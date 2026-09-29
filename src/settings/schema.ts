@@ -134,10 +134,10 @@ export const schema = [
   // and each band paints itself from its own colour list.
   { key: 'armColors', label: 'Colours', group: 'Colour', section: 'Arms', type: 'palette', minColors: 1, maxColors: MAX_BAND_COLORS, default: ['#ffffff'] },
   { key: 'armColorMode', label: 'Colour mode', group: 'Colour', section: 'Arms', type: 'select', default: 'static', options: COLOR_MODES, help: 'Only matters with 2 or more colours.' },
-  { key: 'armShift', label: 'Colour shift speed', group: 'Colour', section: 'Arms', type: 'range', min: 0, max: 1, step: 0.01, default: 0, unit: 'cycles/s', curve: 'sq' },
+  { key: 'armShift', label: 'Colour shift speed', group: 'Colour', section: 'Arms', type: 'range', min: 0, max: 2, step: 0.01, default: 0, unit: 'cycles/s', curve: 'sq' },
   { key: 'gapColors', label: 'Colours', group: 'Colour', section: 'Gaps', type: 'palette', minColors: 1, maxColors: MAX_BAND_COLORS, default: ['#000000'] },
   { key: 'gapColorMode', label: 'Colour mode', group: 'Colour', section: 'Gaps', type: 'select', default: 'static', options: COLOR_MODES },
-  { key: 'gapShift', label: 'Colour shift speed', group: 'Colour', section: 'Gaps', type: 'range', min: 0, max: 1, step: 0.01, default: 0, unit: 'cycles/s', curve: 'sq' },
+  { key: 'gapShift', label: 'Colour shift speed', group: 'Colour', section: 'Gaps', type: 'range', min: 0, max: 2, step: 0.01, default: 0, unit: 'cycles/s', curve: 'sq' },
   { key: 'hueRoll', label: 'Hue roll speed', group: 'Colour', section: 'Hue', type: 'range', min: 0, max: 0.25, step: 0.001, default: 0, unit: 'rev/s', curve: 'sq', help: 'Rotates the hue of every colour.' },
   { key: 'glow', label: 'Strength', group: 'Colour', section: 'Glow', type: 'range', min: 0, max: 2, step: 0.01, default: 0, help: 'Soft light spilling from the bright parts of the spirals.' },
   { key: 'glowSize', label: 'Spread', group: 'Colour', section: 'Glow', type: 'range', min: 0.02, max: 0.3, step: 0.005, default: 0.08, curve: 'log', help: 'How far the light spreads.' },
@@ -159,7 +159,7 @@ export const schema = [
   { key: 's2Mirror', label: 'Mirror (clockwise ↔ anticlockwise)', group: 'Aux. spiral', type: 'toggle', default: true, showIf: { s2Enabled: ['true'], s2Mode: SPIRAL_MODES } },
   { key: 's2Colors', label: 'Colours', group: 'Aux. spiral', section: 'Colour & blending', type: 'palette', minColors: 1, maxColors: MAX_BAND_COLORS, default: ['#f5cb5c'], showIf: { s2Enabled: ['true'] } },
   { key: 's2ColorMode', label: 'Colour mode', group: 'Aux. spiral', section: 'Colour & blending', type: 'select', default: 'static', options: COLOR_MODES, showIf: { s2Enabled: ['true'] } },
-  { key: 's2Shift', label: 'Colour shift speed', group: 'Aux. spiral', section: 'Colour & blending', type: 'range', min: 0, max: 1, step: 0.01, default: 0, unit: 'cycles/s', curve: 'sq', showIf: { s2Enabled: ['true'] } },
+  { key: 's2Shift', label: 'Colour shift speed', group: 'Aux. spiral', section: 'Colour & blending', type: 'range', min: 0, max: 2, step: 0.01, default: 0, unit: 'cycles/s', curve: 'sq', showIf: { s2Enabled: ['true'] } },
   { key: 's2Opacity', label: 'Opacity', group: 'Aux. spiral', section: 'Colour & blending', type: 'range', min: 0, max: 1, step: 0.01, default: 0.8, showIf: { s2Enabled: ['true'] } },
   {
     key: 's2Blend', label: 'Blend mode', group: 'Aux. spiral', section: 'Colour & blending', type: 'select', default: 'normal', showIf: { s2Enabled: ['true'] },
@@ -203,7 +203,9 @@ export const schema = [
   { key: 'invertLength', label: 'Length', group: 'Rhythm', section: 'Inversion', type: 'range', min: 0.05, max: 0.5, step: 0.01, default: 0.15, help: 'Share of each inversion period.', showIf: { invertEnabled: ['true'] } },
   { key: 'zoomPulse', label: 'Amount', group: 'Rhythm', section: 'Zoom pulse', type: 'range', min: 0, max: 0.5, step: 0.01, default: 0, help: 'Gently "breathes" the zoom in time, biggest on the beat.' },
   { key: 'zoomPulseRate', label: 'Rate', group: 'Rhythm', section: 'Zoom pulse', type: 'select', default: '2', options: PULSE_RATES },
-  { key: 'flashUnlock', label: 'Allow more than 3 flashes per second', group: 'Rhythm', section: 'Safety', type: 'toggle', default: false, help: '⚠ Rapid flashing can trigger seizures. While off, beat flashes, inversions and text flashes together stay at or below 3 per second: beat effects skip beats, and the text flash is dropped if it still doesn’t fit.' },
+  { key: 'colorStep', label: 'Step colours on the beat', group: 'Rhythm', section: 'Colour steps', type: 'toggle', default: false, help: 'Colour shifts jump to the next colour on the beat instead of flowing. Applies to every colour list with a shift speed above 0.' },
+  { key: 'colorStepRate', label: 'Rate', group: 'Rhythm', section: 'Colour steps', type: 'select', default: '1', options: PULSE_RATES, showIf: { colorStep: ['true'] } },
+  { key: 'flashUnlock', label: 'Allow more than 3 flashes per second', group: 'Rhythm', section: 'Safety', type: 'toggle', default: false, help: '⚠ Rapid flashing can trigger seizures. While off, beat flashes, inversions, colour steps and text flashes together stay at or below 3 per second: beat effects skip beats, and the text flash is dropped if it still doesn’t fit.' },
 
   // ── Text ──────────────────────────────────────────────────────────────
   // Timed phrases; see engine/text.ts.

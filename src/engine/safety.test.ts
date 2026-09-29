@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaults, type Settings } from '../settings/schema';
-import { flashPlan, MAX_SAFE_FLASHES_PER_SECOND } from './safety';
+import { colorStepsActive, flashPlan, MAX_SAFE_FLASHES_PER_SECOND } from './safety';
 import { textFrame } from './text';
 
 /** Flashes per second from every source, as the plan allows them. */
@@ -56,5 +56,30 @@ describe('flash safety limit', () => {
   it('can be unlocked explicitly', () => {
     const plan = flashPlan(beat({ bpm: 240, flashRate: '0.25', flashUnlock: true }));
     expect(plan.flashBeats).toBe(0.25);
+  });
+});
+
+describe('beat-locked colour steps', () => {
+  const stepping = (over: Partial<Settings> = {}): Settings => ({
+    ...defaults(),
+    armColors: ['#ff0000', '#0000ff'],
+    armShift: 0.5,
+    colorStep: true,
+    colorStepRate: '1',
+    ...over,
+  });
+
+  it('only count when a palette actually changes', () => {
+    expect(colorStepsActive(stepping())).toBe(true);
+    expect(colorStepsActive(stepping({ armShift: 0 }))).toBe(false);
+    expect(colorStepsActive(stepping({ armColors: ['#ff0000'] }))).toBe(false);
+  });
+
+  it('share the flash limit with beat flashes', () => {
+    // 240 BPM: colour steps alone would be 4/s; with a beat flash too, both slow down.
+    const s = stepping({ bpm: 240, flashMode: 'strobe', flashRate: '1' });
+    const plan = flashPlan(s);
+    const bps = 4;
+    expect(bps / plan.flashBeats + bps / plan.colorBeats).toBeLessThanOrEqual(MAX_SAFE_FLASHES_PER_SECOND);
   });
 });

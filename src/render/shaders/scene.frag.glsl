@@ -30,9 +30,12 @@ struct Spiral {
 };
 uniform Spiral uSpiral[2];
 
-// Colour bands: 0 = spiral 1 arms, 1 = spiral 1 gaps, 2 = spiral 2 arms. Up to 3 colours each.
-uniform vec3 uColors[9];
-uniform int uCount[3];
+// Colour bands: 0 = spiral 1 arms, 1 = spiral 1 gaps, 2 = spiral 2 arms, one row each of a
+// palette texture: 6 colours' worth (the palette repeated), 32 texels per colour, already
+// blended in OKLCh on the CPU so blends between bright colours stay vivid (render/color.ts).
+uniform sampler2D uPalette;
+const float PALETTE_SAMPLES = 32.0;
+const float PALETTE_WIDTH = 6.0 * PALETTE_SAMPLES;
 uniform int uColorMode[3];   // 0 static, 1 gradient, 2 cycle, 3 kaleidoscopic
 uniform float uShift[3];     // palette steps
 uniform vec3 uAvg1;          // spiral 1 average colour (anti-moiré fade)
@@ -53,16 +56,11 @@ const float GRADIENT_SCALE = 1.5; // palette steps per unit of distance from cen
 const float TAPER_RADIUS = 1.0;   // arms reach full width at this distance (short screen half = 1)
 const float WOBBLE_TURNS = 0.15;  // arm displacement at full wobble, in turns
 
-vec3 palAt(int band, float i) {
-  int n = uCount[band];
-  int k = int(mod(i, float(n)));
-  return uColors[band * 3 + k];
-}
-
-// Palette at a continuous position: integers are pure colours, fractions crossfade.
+// Palette at a continuous position: integers are pure colours, fractions crossfade. The
+// texture repeats, so any position wraps round the palette.
 vec3 palMix(int band, float x) {
-  float i0 = floor(x);
-  return mix(palAt(band, i0), palAt(band, i0 + 1.0), x - i0);
+  vec2 uv = vec2((x * PALETTE_SAMPLES + 0.5) / PALETTE_WIDTH, (float(band) + 0.5) / 3.0);
+  return textureLod(uPalette, uv, 0.0).rgb;
 }
 
 // k: index of the stripe the pixel belongs to; g: gradient coordinate; sector: kaleidoscope sector.

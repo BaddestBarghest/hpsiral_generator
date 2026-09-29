@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaults, type Settings } from '../settings/schema';
-import { beatPeriod, pulses, rampIntegral, rampMean, rampMultiplier } from './rhythm';
+import { beatPeriod, colorStepPhase, pulses, rampIntegral, rampMean, rampMultiplier } from './rhythm';
 import { initialTimeline, step } from './timeline';
 
 const ramp = (shape: 'smooth' | 'linear'): Settings => ({
@@ -84,5 +84,18 @@ describe('timeline with tempo', () => {
     for (let i = 0; i < Math.round(seconds * 60); i++) tl = step(tl, s, 1 / 60);
     expect(tl.flowPhase).toBeCloseTo((0.5 * rampMean(s) * seconds) % 720720, 6);
     expect(tl.beatPhase).toBeCloseTo(24, 9);
+  });
+});
+
+describe('colour steps on the beat', () => {
+  const s: Settings = { ...defaults(), armColors: ['#ff0000', '#0000ff'], armShift: 0.5, colorStep: true, colorStepRate: '2' };
+  it('advance one whole colour every step, exactly on the beat', () => {
+    expect(colorStepPhase(s, 0)).toBe(0);
+    expect(colorStepPhase(s, 1.99)).toBe(0);
+    expect(colorStepPhase(s, 2)).toBe(1);
+    expect(colorStepPhase(s, 4.5)).toBe(2);
+  });
+  it('make loops wait for the palettes to come round', () => {
+    expect(beatPeriod(s)).toBe(12); // 2 beats per step × 6-step palette cycle
   });
 });

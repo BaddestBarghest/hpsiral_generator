@@ -15,6 +15,8 @@ export interface FlashPlan {
   flashBeats: number;
   /** Beats between inversions (likewise). */
   invertBeats: number;
+  /** Beats between beat-locked colour steps (likewise). */
+  colorBeats: number;
   /** Whether the text flash may fire. */
   textFlash: boolean;
 }
@@ -30,32 +32,47 @@ function textFlashRate(s: Settings): number {
   return 1 / textSlotSeconds(s);
 }
 
+/** Whether any colour band actually changes when colours step on the beat. */
+export function colorStepsActive(s: Settings): boolean {
+  if (!s.colorStep) return false;
+  const shifting = (colors: string[], speed: number) => colors.length > 1 && speed > 0;
+  return shifting(s.armColors, s.armShift) || shifting(s.gapColors, s.gapShift) || (s.s2Enabled && shifting(s.s2Colors, s.s2Shift));
+}
+
+type BeatEffect = 'flashBeats' | 'invertBeats' | 'colorBeats';
+
 /**
  * Fits every flashing effect into the shared budget unless the user unlocked faster
- * flashing. Beat flashes and inversions skip beats (their period doubles, so they stay on
- * the beat grid), fastest first. The text flash is kept if it fits alongside them, even
- * when that means slowing them further; otherwise it's the one switched off.
+ * flashing. Beat effects (flashes, inversions, colour steps) skip beats (their period
+ * doubles, so they stay on the beat grid), fastest first. The text flash is kept if it fits
+ * alongside them, even when that means slowing them further; otherwise it's switched off.
  */
 export function flashPlan(s: Settings): FlashPlan {
-  const flashRate = Number(s.flashRate);
-  const invertRate = Number(s.invertRate);
+  const chosen: Record<BeatEffect, number> = {
+    flashBeats: Number(s.flashRate),
+    invertBeats: Number(s.invertRate),
+    colorBeats: Number(s.colorStepRate),
+  };
+  const active: Record<BeatEffect, boolean> = {
+    flashBeats: s.flashMode !== 'off',
+    invertBeats: s.invertEnabled,
+    colorBeats: colorStepsActive(s),
+  };
   const text = textFlashRate(s);
-  if (s.flashUnlock) return { flashBeats: flashRate, invertBeats: invertRate, textFlash: text > 0 };
+  if (s.flashUnlock) return { ...chosen, textFlash: text > 0 };
 
   const bps = s.bpm / 60;
+  const effects = Object.keys(chosen) as BeatEffect[];
   const fit = (budget: number): FlashPlan | null => {
-    let flashBeats = flashRate;
-    let invertBeats = invertRate;
+    const beats = { ...chosen };
+    const rate = (e: BeatEffect) => (active[e] ? bps / beats[e] : 0);
     for (;;) {
-      const f = s.flashMode !== 'off' ? bps / flashBeats : 0;
-      const i = s.invertEnabled ? bps / invertBeats : 0;
-      if (f + i <= budget + 1e-9) return { flashBeats, invertBeats, textFlash: false };
-      // Slow the faster effect that can still be slowed.
-      const canF = f > 0 && flashBeats < MAX_PERIOD_BEATS;
-      const canI = i > 0 && invertBeats < MAX_PERIOD_BEATS;
-      if (canF && (!canI || f >= i)) flashBeats *= 2;
-      else if (canI) invertBeats *= 2;
-      else return null;
+      if (effects.reduce((sum, e) => sum + rate(e), 0) <= budget + 1e-9) return { ...beats, textFlash: false };
+      // Slow the fastest effect that can still be slowed.
+      const slowable = effects.filter((e) => active[e] && beats[e] < MAX_PERIOD_BEATS);
+      if (slowable.length === 0) return null;
+      const fastest = slowable.reduce((a, b) => (rate(b) > rate(a) ? b : a));
+      beats[fastest] *= 2;
     }
   };
 

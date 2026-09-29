@@ -1,11 +1,10 @@
 import type { Settings } from '../settings/schema';
-import { MAX_BAND_COLORS } from '../settings/schema';
 import { COLOR_PERIOD, type TimelineState } from '../engine/timeline';
-import { pulses, type Pulses } from '../engine/rhythm';
+import { colorStepPhase, pulses, type Pulses } from '../engine/rhythm';
 import { isWall, textFrame, type TextFrame } from '../engine/text';
 import { lcm } from '../engine/math';
 import { TextLayer } from './TextLayer';
-import { averageRgb, hexToRgb, type RGB } from './color';
+import { averageRgb, hexToRgb, PALETTE_CYCLE, PALETTE_SAMPLES, paletteStrip, type RGB } from './color';
 import {
   createContext,
   createProgram,
@@ -87,7 +86,10 @@ export class Renderer {
   private vao!: WebGLVertexArrayObject;
   private text!: TextLayer;
   private lost = false;
-  private colorBuf = new Float32Array(3 * MAX_BAND_COLORS * 3);
+  /** Palette strips (one row per colour band), rebuilt only when a palette changes. */
+  private palette!: WebGLTexture;
+  private paletteKey = '';
+  private paletteBuf = new Uint8Array(PALETTE_CYCLE * PALETTE_SAMPLES * 3 * 4);
 
   private sceneTarget: RenderTarget | null = null;
   /** Ping-pong afterimage buffers: history[0] is the latest. */
@@ -133,6 +135,14 @@ export class Renderer {
   private initResources(): void {
     const gl = this.gl;
     this.vao = gl.createVertexArray()!;
+    this.palette = gl.createTexture()!;
+    gl.bindTexture(gl.TEXTURE_2D, this.palette);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, PALETTE_CYCLE * PALETTE_SAMPLES, 3);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT); // palettes wrap round
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    this.paletteKey = '';
     this.text = new TextLayer(gl, () => this.onNeedsRedraw());
   }
 
@@ -373,7 +383,17 @@ export class Renderer {
 
     // Bands: 0 = spiral 1 arms, 1 = spiral 1 gaps, 2 = spiral 2 arms.
     const bands = [s.armColors, s.gapColors, s.s2Colors].map((list) => list.map(hexToRgb));
-    bands.forEach((list, band) => list.forEach((c, i) => this.colorBuf.set(c, (band * MAX_BAND_COLORS + i) * 3)));
+    const key = JSON.stringify([s.armColors, s.gapColors, s.s2Colors]);
+    if (key !== this.paletteKey) {
+      this.paletteKey = key;
+      const row = PALETTE_CYCLE * PALETTE_SAMPLES * 4;
+      bands.forEach((list, band) => paletteStrip(list, this.paletteBuf, band * row));
+      gl.bindTexture(gl.TEXTURE_2D, this.palette);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, PALETTE_CYCLE * PALETTE_SAMPLES, 3, gl.RGBA, gl.UNSIGNED_BYTE, this.paletteBuf);
+    }
+    gl.activeTexture(gl.TEXTURE4);
+    gl.bindTexture(gl.TEXTURE_2D, this.palette);
+    gl.uniform1i(loc('uPalette'), 4);
     const [armAvg, gapAvg, s2Avg] = bands.map(averageRgb);
     // Area-weighted average of arms and gaps, for the anti-moiré fade.
     const avg1 = armAvg.map((a, i) => a * s.balance + gapAvg[i] * (1 - s.balance)) as RGB;
@@ -408,15 +428,15 @@ export class Renderer {
       gl.uniform1f(loc(u + 'width'), sp.width);
     });
 
-    gl.uniform3fv(loc('uColors'), this.colorBuf);
-    gl.uniform1iv(loc('uCount'), bands.map((b) => b.length));
     gl.uniform1iv(loc('uColorMode'), [s.armColorMode, s.gapColorMode, s.s2ColorMode].map((m) => COLOR_MODES[m]));
     // A speed of 0 means your exact colours, even while paused (the timeline only resets
     // these phases when it advances).
+    // Beat-locked: every shifting palette moves one whole colour per step, on the beat.
+    const step = s.colorStep ? colorStepPhase(s, tl.beatPhase) : 0;
     gl.uniform1fv(loc('uShift'), [
-      s.armShift === 0 ? 0 : tl.armColorPhase,
-      s.gapShift === 0 ? 0 : tl.gapColorPhase,
-      s.s2Shift === 0 ? 0 : tl.s2ColorPhase,
+      s.armShift === 0 ? 0 : s.colorStep ? step : tl.armColorPhase,
+      s.gapShift === 0 ? 0 : s.colorStep ? step : tl.gapColorPhase,
+      s.s2Shift === 0 ? 0 : s.colorStep ? step : tl.s2ColorPhase,
     ]);
     gl.uniform3fv(loc('uAvg1'), avg1);
     gl.uniform3fv(loc('uAvg2'), s2Avg);

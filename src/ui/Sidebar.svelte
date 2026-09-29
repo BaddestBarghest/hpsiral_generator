@@ -11,6 +11,7 @@
   import Control from './Control.svelte';
   import PanelDrawer from './PanelDrawer.svelte';
   import SectionHeading from './SectionHeading.svelte';
+  import PaletteSets from './color/PaletteSets.svelte';
   import { autoShiftFor, hintFor } from './hints';
 
   let {
@@ -61,6 +62,9 @@
         <!-- Headings come from visible controls only, so a section with nothing to show disappears. -->
         {@const visible = byGroup[group].filter((p) => isVisible(p, settings))}
         <div class="space-y-5">
+          {#if group === 'Colour'}
+            <PaletteSets {settings} />
+          {/if}
           {#each visible as p, i (p.key)}
             {#if p.section && p.section !== visible[i - 1]?.section}
               <SectionHeading class={i > 0 ? 'pt-3' : ''}>{p.section}</SectionHeading>

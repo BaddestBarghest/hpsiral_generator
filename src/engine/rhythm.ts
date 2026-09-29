@@ -1,6 +1,6 @@
 import type { Settings } from '../settings/schema';
 import { textCycleSlots, textSlotBeats } from './text';
-import { flashPlan } from './safety';
+import { colorStepsActive, flashPlan } from './safety';
 import { fract, lcm } from './math';
 
 /**
@@ -9,6 +9,14 @@ import { fract, lcm } from './math';
  */
 
 export const beatsPerSecond = (s: Settings) => s.bpm / 60;
+
+/** Steps after which every beat-stepped palette is back where it started (lcm of 1..3). */
+const COLOR_STEP_CYCLE = 6;
+
+/** Palette steps taken by beat-locked colour stepping at beat position `beats`. */
+export function colorStepPhase(s: Settings, beats: number): number {
+  return Math.floor(beats / flashPlan(s).colorBeats) % COLOR_STEP_CYCLE;
+}
 
 // ── Speed ramp ────────────────────────────────────────────────────────────
 // Multiplier m(x) = min + (max - min) * shape(x), x = ramp cycles (beats / rampBeats).
@@ -95,6 +103,8 @@ export function beatPeriod(s: Settings): number {
   if (s.rampEnabled) periods.push(s.rampBeats);
   if (s.flashMode !== 'off') periods.push(plan.flashBeats);
   if (s.invertEnabled) periods.push(plan.invertBeats);
+  // Colour steps repeat once every palette has come round (6 = lcm of 1..3 colours).
+  if (colorStepsActive(s)) periods.push(plan.colorBeats * COLOR_STEP_CYCLE);
   if (s.zoomPulse > 0) periods.push(Number(s.zoomPulseRate));
   // Beat-synced text repeats once its whole cycle (every phrase, or every wall layout) has shown.
   const cycle = textCycleSlots(s);
