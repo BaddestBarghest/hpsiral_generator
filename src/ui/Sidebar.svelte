@@ -9,19 +9,20 @@
     open = $bindable(),
     settings,
     onreset,
-    record,
+    output,
   }: {
     open: boolean;
     settings: Settings;
     onreset: () => void;
-    record: Snippet;
+    /** Extra content at the end of the Output tab (recording and rendering). */
+    output: Snippet;
   } = $props();
 
   const params = schema as readonly Param[];
   const byGroup = Object.fromEntries(groups.map((g) => [g, params.filter((p) => p.group === g)]));
 
   // Compact underline tabs so all six fit the drawer; the bar scrolls sideways if not.
-  const tabBase = 'whitespace-nowrap border-b-2 bg-transparent px-2 py-3 text-sm';
+  const tabBase = 'whitespace-nowrap border-b-2 bg-transparent px-1.5 py-3 text-sm';
   const activeTab = `${tabBase} border-primary-500 text-primary-500`;
   const inactiveTab = `${tabBase} border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-200`;
 
@@ -63,12 +64,12 @@
               <Control param={p} value={settings[p.key as keyof Settings]} onchange={(v) => set(p.key, v)} />
             {/if}
           {/each}
+          {#if group === 'Output'}
+            {@render output()}
+          {/if}
         </div>
       </TabItem>
     {/each}
-    <TabItem title="Record" activeClass={activeTab} inactiveClass={inactiveTab}>
-      {@render record()}
-    </TabItem>
   </Tabs>
 
   <div class="shrink-0 border-t border-gray-700 pt-3 pe-2">

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defaults, type Settings } from '../settings/schema';
 import { exactLoop, flowPeriod, flowPeriod2, planLoop } from './loop';
+import { beatPeriod } from './rhythm';
 import { initialTimeline, step } from './timeline';
 
 /** Distance from `x` to the nearest multiple of `period`. */
@@ -24,6 +25,8 @@ function assertSeamless(s: Settings, target: number, fps: number, mode: 'exact' 
     if (s.s2Colors.length > 1) expect(offGrid(tl.s2ColorPhase, s.s2Colors.length)).toBeLessThan(1e-6);
   }
   if (s.wobble > 0) expect(offGrid(tl.wobblePhase, 1)).toBeLessThan(1e-6);
+  const beats = beatPeriod(plan.settings);
+  if (beats > 0) expect(offGrid(tl.beatPhase, beats)).toBeLessThan(1e-6);
   return plan;
 }
 
@@ -122,6 +125,28 @@ describe('planLoop', () => {
     assertSeamless({ ...s, s2Speed: 0.25, wobbleSpeed: 0.5, s2Shift: 0.5 }, 1, 30, 'exact');
     // Invisible motions are ignored: a disabled second spiral doesn't lengthen the loop.
     expect(exactLoop({ ...s, s2Enabled: false, wobble: 0 }, 30)?.seconds).toBeCloseTo(2);
+  });
+
+  it('loops with a speed ramp and beat pulses', () => {
+    const s: Settings = {
+      ...defaults(),
+      speed: 0.5,
+      bpm: 100,
+      rampEnabled: true,
+      rampMin: 0.4,
+      rampMax: 1.6,
+      rampBeats: 8,
+      flashMode: 'soft',
+      flashRate: '1',
+      zoomPulse: 0.1,
+      zoomPulseRate: '2',
+    };
+    // Beat pattern repeats every lcm(8, 1, 2) = 8 beats = 4.8 s at 100 BPM; the flow averages
+    // 0.5 × mean(0.4, 1.6) = 0.5 cycles/s → 2 s. Exact loop = lcm(4.8 s, 2 s) = 24 s.
+    expect(exactLoop(s, 30)?.seconds).toBeCloseTo(24);
+    assertSeamless(s, 10, 30, 'exact');
+    const short = assertSeamless({ ...s, bpm: 97, speed: 0.37 }, 5, 30, 'short');
+    expect(short.changes.map((c) => c.key)).toContain('bpm');
   });
 
   it('uses the other motions when the flow is still', () => {

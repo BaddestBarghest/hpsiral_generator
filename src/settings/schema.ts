@@ -1,7 +1,7 @@
 // Single source of truth for every user-facing parameter.
 // The UI, persistence/validation and renderer uniforms are all driven from this table.
 
-export type Group = 'Spiral' | 'Colour' | 'Spiral 2' | 'Effects' | 'Display';
+export type Group = 'Spiral' | 'Colour' | 'Spiral 2' | 'Rhythm' | 'Effects' | 'Output';
 
 interface Base<K extends string> {
   key: K;
@@ -23,6 +23,8 @@ export interface RangeParam<K extends string = string> extends Base<K> {
   step: number;
   default: number;
   unit?: string;
+  /** Show a "Tap" button that sets the value from the rhythm of taps (BPM). */
+  tapTempo?: boolean;
 }
 
 export interface SelectParam<K extends string = string, V extends string = string> extends Base<K> {
@@ -63,6 +65,15 @@ const PATTERNS = [
 const DIRECTIONS = [
   { value: 'inward', label: 'Inward' },
   { value: 'outward', label: 'Outward' },
+] as const;
+
+/** Pulse periods in beats (strings so they work as select values). */
+const PULSE_RATES = [
+  { value: '0.25', label: '4× per beat' },
+  { value: '0.5', label: '2× per beat' },
+  { value: '1', label: 'Every beat' },
+  { value: '2', label: 'Every 2 beats' },
+  { value: '4', label: 'Every 4 beats' },
 ] as const;
 
 const COLOR_MODES = [
@@ -132,6 +143,39 @@ export const schema = [
     ],
   },
 
+  // ── Rhythm ────────────────────────────────────────────────────────────
+  // Everything here follows the master tempo; see engine/rhythm.ts.
+  { key: 'bpm', label: 'Beats per minute', group: 'Rhythm', section: 'Tempo', type: 'range', min: 30, max: 240, step: 1, default: 120, tapTempo: true },
+  { key: 'rampEnabled', label: 'Vary speed with the beat', group: 'Rhythm', section: 'Speed ramp', type: 'toggle', default: false, help: 'Speeds both spirals up and down over a cycle of beats.' },
+  { key: 'rampMin', label: 'Slowest', group: 'Rhythm', section: 'Speed ramp', type: 'range', min: 0, max: 1.5, step: 0.05, default: 0.4, unit: '× speed', showIf: { rampEnabled: ['true'] } },
+  { key: 'rampMax', label: 'Fastest', group: 'Rhythm', section: 'Speed ramp', type: 'range', min: 0.5, max: 4, step: 0.05, default: 1.6, unit: '× speed', showIf: { rampEnabled: ['true'] } },
+  { key: 'rampBeats', label: 'Cycle length', group: 'Rhythm', section: 'Speed ramp', type: 'range', min: 2, max: 64, step: 1, default: 16, unit: 'beats', showIf: { rampEnabled: ['true'] } },
+  {
+    key: 'rampShape', label: 'Curve', group: 'Rhythm', section: 'Speed ramp', type: 'select', default: 'smooth', showIf: { rampEnabled: ['true'] },
+    options: [
+      { value: 'smooth', label: 'Smooth' },
+      { value: 'linear', label: 'Linear' },
+    ],
+  },
+  {
+    key: 'flashMode', label: 'Mode', group: 'Rhythm', section: 'Flash', type: 'select', default: 'off',
+    options: [
+      { value: 'off', label: 'Off' },
+      { value: 'soft', label: 'Soft flash (fades out)' },
+      { value: 'strobe', label: 'Strobe (hard on/off)' },
+    ],
+  },
+  { key: 'flashRate', label: 'Rate', group: 'Rhythm', section: 'Flash', type: 'select', default: '1', options: PULSE_RATES, showIf: { flashMode: ['soft', 'strobe'] } },
+  { key: 'flashLength', label: 'Length', group: 'Rhythm', section: 'Flash', type: 'range', min: 0.05, max: 0.9, step: 0.01, default: 0.3, help: 'Share of each flash period.', showIf: { flashMode: ['soft', 'strobe'] } },
+  { key: 'flashIntensity', label: 'Intensity', group: 'Rhythm', section: 'Flash', type: 'range', min: 0, max: 1, step: 0.01, default: 0.6, showIf: { flashMode: ['soft', 'strobe'] } },
+  { key: 'flashColor', label: 'Colour', group: 'Rhythm', section: 'Flash', type: 'color', default: '#ffffff', showIf: { flashMode: ['soft', 'strobe'] } },
+  { key: 'invertEnabled', label: 'Invert colours on the beat', group: 'Rhythm', section: 'Inversion', type: 'toggle', default: false },
+  { key: 'invertRate', label: 'Rate', group: 'Rhythm', section: 'Inversion', type: 'select', default: '4', options: PULSE_RATES, showIf: { invertEnabled: ['true'] } },
+  { key: 'invertLength', label: 'Length', group: 'Rhythm', section: 'Inversion', type: 'range', min: 0.05, max: 0.5, step: 0.01, default: 0.15, showIf: { invertEnabled: ['true'] } },
+  { key: 'zoomPulse', label: 'Amount', group: 'Rhythm', section: 'Zoom pulse', type: 'range', min: 0, max: 0.5, step: 0.01, default: 0, help: 'Gently "breathes" the zoom in time.' },
+  { key: 'zoomPulseRate', label: 'Rate', group: 'Rhythm', section: 'Zoom pulse', type: 'select', default: '2', options: PULSE_RATES },
+  { key: 'flashUnlock', label: 'Allow more than 3 flashes per second', group: 'Rhythm', section: 'Safety', type: 'toggle', default: false, help: '⚠ Rapid flashing can trigger seizures. While off, flashes and inversions skip beats to stay at or below 3 per second.' },
+
   // ── Effects ───────────────────────────────────────────────────────────
   { key: 'twist', label: 'Twist', group: 'Effects', section: 'Motion', type: 'range', min: -3, max: 3, step: 0.01, default: 0, unit: 'turns', help: 'Bends the arms more the further out they are.' },
   { key: 'wobble', label: 'Wobble', group: 'Effects', section: 'Motion', type: 'range', min: 0, max: 1, step: 0.01, default: 0, help: 'Ripples the arms sideways.' },
@@ -147,10 +191,10 @@ export const schema = [
   { key: 'dotColor', label: 'Colour', group: 'Effects', section: 'Centre dot', type: 'color', default: '#f5cb5c', showIf: { dotEnabled: ['true'] } },
 
   // ── Display ───────────────────────────────────────────────────────────
-  { key: 'renderScale', label: 'Render scale', group: 'Display', type: 'range', min: 0.25, max: 1, step: 0.05, default: 1 },
-  { key: 'maxDpr', label: 'Max pixel ratio', group: 'Display', type: 'range', min: 1, max: 3, step: 0.25, default: 2 },
+  { key: 'renderScale', label: 'Render scale', group: 'Output', section: 'Display', type: 'range', min: 0.25, max: 1, step: 0.05, default: 1 },
+  { key: 'maxDpr', label: 'Max pixel ratio', group: 'Output', section: 'Display', type: 'range', min: 1, max: 3, step: 0.25, default: 2 },
   {
-    key: 'maxFps', label: 'Max FPS', group: 'Display', type: 'select', default: '0',
+    key: 'maxFps', label: 'Max FPS', group: 'Output', section: 'Display', type: 'select', default: '0',
     options: [
       { value: '0', label: 'Display refresh rate' },
       { value: '60', label: '60' },
@@ -172,7 +216,7 @@ type ValueOf<P> = P extends { type: 'range' } ? number
 export type Settings = { -readonly [P in Entry as P['key']]: ValueOf<P> };
 export type SettingKey = keyof Settings;
 
-export const groups: Group[] = ['Spiral', 'Colour', 'Spiral 2', 'Effects', 'Display'];
+export const groups: Group[] = ['Spiral', 'Colour', 'Spiral 2', 'Rhythm', 'Effects', 'Output'];
 
 export function defaults(): Settings {
   const out: Record<string, unknown> = {};

@@ -1,4 +1,5 @@
 import type { Settings } from '../settings/schema';
+import { beatsPerSecond, rampIntegral } from './rhythm';
 
 /**
  * Flow phase wraps at lcm(1..16), so every arm count divides it and stripe indices
@@ -31,6 +32,8 @@ export interface TimelineState {
   s2ColorPhase: number;
   /** Wobble ripple travel in cycles, wrapped to [0, 1). */
   wobblePhase: number;
+  /** Beats elapsed at the master tempo (not wrapped; drives ramp and pulses). */
+  beatPhase: number;
 }
 
 export function initialTimeline(): TimelineState {
@@ -43,6 +46,7 @@ export function initialTimeline(): TimelineState {
     gapColorPhase: 0,
     s2ColorPhase: 0,
     wobblePhase: 0,
+    beatPhase: 0,
   };
 }
 
@@ -51,14 +55,18 @@ const wrap = (x: number, period: number) => x - Math.floor(x / period) * period;
 export function step(state: TimelineState, s: Settings, dt: number): TimelineState {
   const dir = s.direction === 'inward' ? 1 : -1;
   const dir2 = s.s2Direction === 'inward' ? 1 : -1;
+  const beatPhase = state.beatPhase + beatsPerSecond(s) * dt;
+  // Seconds of flow at unit speed, stretched by the speed ramp (exact integral).
+  const flowTime = rampIntegral(s, state.beatPhase, beatPhase, dt);
   return {
     time: state.time + dt,
-    flowPhase: wrap(state.flowPhase + s.speed * dir * dt, FLOW_PERIOD),
-    flowPhase2: wrap(state.flowPhase2 + s.s2Speed * dir2 * dt, FLOW_PERIOD),
+    flowPhase: wrap(state.flowPhase + s.speed * dir * flowTime, FLOW_PERIOD),
+    flowPhase2: wrap(state.flowPhase2 + s.s2Speed * dir2 * flowTime, FLOW_PERIOD),
     huePhase: wrap(state.huePhase + s.hueRoll * dt, 1),
     armColorPhase: wrap(state.armColorPhase + s.armShift * dt, COLOR_PERIOD),
     gapColorPhase: wrap(state.gapColorPhase + s.gapShift * dt, COLOR_PERIOD),
     s2ColorPhase: wrap(state.s2ColorPhase + s.s2Shift * dt, COLOR_PERIOD),
     wobblePhase: wrap(state.wobblePhase + s.wobbleSpeed * dt, 1),
+    beatPhase,
   };
 }

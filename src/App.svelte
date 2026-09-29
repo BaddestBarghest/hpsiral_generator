@@ -303,8 +303,8 @@
   </div>
 
   <Sidebar bind:open={drawerOpen} {settings} onreset={resetSettings}>
-    {#snippet record()}
-      <h3 class="mb-4 border-b border-gray-700 pb-1 text-xs font-semibold tracking-wider text-primary-500 uppercase">
+    {#snippet output()}
+      <h3 class="mb-4 mt-8 border-b border-gray-700 pb-1 text-xs font-semibold tracking-wider text-primary-500 uppercase">
         Live recording
       </h3>
       <RecordPanel

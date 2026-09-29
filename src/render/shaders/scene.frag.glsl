@@ -46,6 +46,9 @@ uniform float uDotSoftness;
 uniform vec3 uDotColor;
 
 uniform float uHueShift;     // radians
+uniform float uFlash;        // 0..1 mix towards uFlashColor (beat flash / strobe)
+uniform vec3 uFlashColor;
+uniform float uInvert;       // 0..1 mix towards the inverted image (beat inversion)
 uniform bool uDither;        // only when drawing straight to the screen
 
 const float TAU = 6.283185307179586;
@@ -226,6 +229,10 @@ void main() {
     float soft = uDotSoftness * uDotSize;
     col = mix(col, uDotColor, 1.0 - smoothstep(uDotSize - soft - aa, uDotSize + aa, d));
   }
+
+  // Beat pulses apply to the whole image, dot included.
+  col = mix(col, 1.0 - col, uInvert);
+  col = mix(col, uFlashColor, uFlash);
 
   if (uDither) {
     // ±0.5 LSB interleaved-gradient-noise dither breaks up 8-bit banding in gradients,

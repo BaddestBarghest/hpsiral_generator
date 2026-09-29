@@ -1,4 +1,5 @@
 import type { Settings } from '../settings/schema';
+import { beatPeriod, beatsPerSecond, rampMean } from './rhythm';
 
 /**
  * Seamless loops: every periodic motion must complete a whole number of cycles in the
@@ -34,27 +35,38 @@ export function flowPeriod2(s: Settings): number {
   return s.s2Mode === 'concentric' ? s.s2Colors.length : Math.round(s.s2Arms);
 }
 
-type RateKey = 'speed' | 'hueRoll' | 'armShift' | 'gapShift' | 's2Speed' | 's2Shift' | 'wobbleSpeed';
+type RateKey = 'speed' | 'hueRoll' | 'armShift' | 'gapShift' | 's2Speed' | 's2Shift' | 'wobbleSpeed' | 'bpm';
 
 interface Motion {
   key: RateKey;
   label: string;
+  /** Cycles-of-something per second. */
   rate: number;
   /** Units of the rate after which that motion repeats. */
   period: number;
+  /** Converts a rate back to the setting's own units (e.g. beats/s → BPM). */
+  toSetting: (rate: number) => number;
 }
 
+const same = (r: number) => r;
+
 function motions(s: Settings): Motion[] {
+  // With a speed ramp, the flow advances by speed × mean multiplier per second on
+  // average; over whole ramp cycles (guaranteed by the tempo motion) that is exact.
+  const mean = rampMean(s);
+  const beats = beatPeriod(s);
   const all: Motion[] = [
-    { key: 'speed', label: 'Speed', rate: s.speed, period: flowPeriod(s) },
-    { key: 'hueRoll', label: 'Hue roll speed', rate: s.hueRoll, period: 1 },
+    { key: 'speed', label: 'Speed', rate: s.speed * mean, period: flowPeriod(s), toSetting: (r) => r / mean },
+    { key: 'hueRoll', label: 'Hue roll speed', rate: s.hueRoll, period: 1, toSetting: same },
     // A single colour can't visibly shift, so it doesn't constrain the loop.
-    { key: 'armShift', label: 'Arm colour shift', rate: s.armColors.length > 1 ? s.armShift : 0, period: s.armColors.length },
-    { key: 'gapShift', label: 'Gap colour shift', rate: s.gapColors.length > 1 ? s.gapShift : 0, period: s.gapColors.length },
+    { key: 'armShift', label: 'Arm colour shift', rate: s.armColors.length > 1 ? s.armShift : 0, period: s.armColors.length, toSetting: same },
+    { key: 'gapShift', label: 'Gap colour shift', rate: s.gapColors.length > 1 ? s.gapShift : 0, period: s.gapColors.length, toSetting: same },
     // Hidden or invisible motions don't constrain the loop either.
-    { key: 's2Speed', label: 'Spiral 2 speed', rate: s.s2Enabled ? s.s2Speed : 0, period: flowPeriod2(s) },
-    { key: 's2Shift', label: 'Spiral 2 colour shift', rate: s.s2Enabled && s.s2Colors.length > 1 ? s.s2Shift : 0, period: s.s2Colors.length },
-    { key: 'wobbleSpeed', label: 'Wobble speed', rate: s.wobble > 0 ? s.wobbleSpeed : 0, period: 1 },
+    { key: 's2Speed', label: 'Spiral 2 speed', rate: s.s2Enabled ? s.s2Speed * mean : 0, period: flowPeriod2(s), toSetting: (r) => r / mean },
+    { key: 's2Shift', label: 'Spiral 2 colour shift', rate: s.s2Enabled && s.s2Colors.length > 1 ? s.s2Shift : 0, period: s.s2Colors.length, toSetting: same },
+    { key: 'wobbleSpeed', label: 'Wobble speed', rate: s.wobble > 0 ? s.wobbleSpeed : 0, period: 1, toSetting: same },
+    // Ramp cycles and flash/inversion/zoom pulses all repeat every `beats` beats.
+    { key: 'bpm', label: 'Tempo (BPM)', rate: beats > 0 ? beatsPerSecond(s) : 0, period: beats, toSetting: (r) => r * 60 },
   ];
   return all.filter((m) => Math.abs(m.rate) > 1e-9);
 }
@@ -79,11 +91,9 @@ export interface LoopPlan {
 }
 
 // ── Exact loop: LCM of every motion's cycle time ─────────────────────────────
-// Slider steps are multiples of 0.005, so each rate is an integer number of
-// thousandths and each cycle time (period / rate) an exact fraction. BigInt keeps
-// the LCM exact even when it gets astronomically long.
-
-const RATE_SCALE = 1000n;
+// Slider steps (and BPM / 60) are simple fractions, so each cycle time
+// (period / rate) is an exact fraction. BigInt keeps the LCM exact even when it
+// gets astronomically long.
 
 const bgcd = (a: bigint, b: bigint): bigint => (b === 0n ? a : bgcd(b, a % b));
 const blcm = (a: bigint, b: bigint) => (a / bgcd(a, b)) * b;
@@ -110,13 +120,14 @@ export interface ExactLoop {
 export function exactLoop(s: Settings, fps: number): ExactLoop | null {
   const ms = motions(s);
   if (ms.length === 0) return null;
-  // Cycle time_i = period_i / rate_i = period_i * 1000 / n_i  (n_i = rate in thousandths).
+  // Cycle time = period / rate = (pn / pd) / (rn / rd) = (pn * rd) / (pd * rn).
   let num = 0n; // LCM of numerators
   let den = 0n; // GCD of denominators
   for (const m of ms) {
-    const n = BigInt(Math.max(1, Math.round(Math.abs(m.rate) * Number(RATE_SCALE))));
-    let a = BigInt(m.period) * RATE_SCALE;
-    let b = n;
+    const [pn, pd] = toFraction(m.period);
+    const [rn, rd] = toFraction(Math.abs(m.rate));
+    let a = pn * rd;
+    let b = pd * (rn === 0n ? 1n : rn);
     const g = bgcd(a, b);
     a /= g;
     b /= g;
@@ -168,9 +179,11 @@ export function planLoop(s: Settings, targetSeconds: number, fps: number, mode: 
   const changes: LoopChange[] = [];
   for (const m of ms) {
     const cycles = Math.max(1, Math.round((Math.abs(m.rate) * duration) / m.period));
-    const to = (Math.sign(m.rate) * cycles * m.period) / duration;
+    const rate = (Math.sign(m.rate) * cycles * m.period) / duration;
+    const from = m.toSetting(m.rate);
+    const to = m.toSetting(rate);
     settings[m.key] = to;
-    if (Math.abs(to - m.rate) > 5e-4) changes.push({ key: m.key, label: m.label, from: m.rate, to });
+    if (Math.abs(to - from) > 5e-4) changes.push({ key: m.key, label: m.label, from, to });
   }
   return { duration, frames, settings, changes, shortest };
 }

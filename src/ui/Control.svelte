@@ -12,6 +12,23 @@
     return n.toFixed(decimals);
   }
 
+  // Tap tempo: BPM from the average gap between recent taps; a 2 s pause starts over.
+  const TAP_RESET_MS = 2000;
+  const TAP_WINDOW = 6;
+  let taps: number[] = [];
+  let tapCount = $state(0);
+
+  function tap() {
+    if (param.type !== 'range') return;
+    const now = performance.now();
+    if (taps.length && now - taps[taps.length - 1] > TAP_RESET_MS) taps = [];
+    taps = [...taps, now].slice(-TAP_WINDOW);
+    tapCount = taps.length;
+    if (taps.length < 2) return;
+    const avgGap = (taps[taps.length - 1] - taps[0]) / (taps.length - 1);
+    onchange(Math.min(param.max, Math.max(param.min, Math.round(60000 / avgGap))));
+  }
+
   function setColor(i: number, c: string) {
     const next = [...(value as string[])];
     next[i] = c;
@@ -23,7 +40,21 @@
   {#if param.type === 'range'}
     <div class="flex items-baseline justify-between">
       <Label for={id} class="text-sm">{param.label}</Label>
-      <span class="text-xs tabular-nums text-gray-400">{fmt(value as number, param.step)}{param.unit ? ` ${param.unit}` : ''}</span>
+      <div class="flex items-center gap-2">
+        <span class="text-xs tabular-nums text-gray-400">{fmt(value as number, param.step)}{param.unit ? ` ${param.unit}` : ''}</span>
+        {#if param.tapTempo}
+          <Button
+            size="xs"
+            color="alternative"
+            class="px-2.5 py-1"
+            onclick={tap}
+            title="Tap along to the beat (at least twice)"
+            aria-label={`Tap tempo${tapCount === 1 ? ' (keep tapping)' : ''}`}
+          >
+            Tap{tapCount === 1 ? '…' : ''}
+          </Button>
+        {/if}
+      </div>
     </div>
     <Range
       {id}

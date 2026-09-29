@@ -1,6 +1,7 @@
 import type { Settings } from '../settings/schema';
 import { MAX_BAND_COLORS } from '../settings/schema';
 import { COLOR_PERIOD, type TimelineState } from '../engine/timeline';
+import { pulses } from '../engine/rhythm';
 import { averageRgb, hexToRgb, type RGB } from './color';
 import {
   createContext,
@@ -178,8 +179,10 @@ export class Renderer {
     // Area-weighted average of arms and gaps, for the anti-moiré fade.
     const avg1 = armAvg.map((a, i) => a * s.balance + gapAvg[i] * (1 - s.balance)) as RGB;
 
+    const pulse = pulses(s, tl.beatPhase);
+
     gl.uniform2f(loc('uResolution'), width, height);
-    gl.uniform1f(loc('uZoom'), s.zoom);
+    gl.uniform1f(loc('uZoom'), s.zoom * pulse.zoom);
     gl.uniform1i(loc('uShape'), s.shape === 'polygon' ? 1 : 0);
     gl.uniform1f(loc('uSides'), s.sides);
     gl.uniform1f(loc('uExponent'), s.exponent);
@@ -225,6 +228,9 @@ export class Renderer {
     gl.uniform3fv(loc('uDotColor'), hexToRgb(s.dotColor));
 
     gl.uniform1f(loc('uHueShift'), tl.huePhase * Math.PI * 2);
+    gl.uniform1f(loc('uFlash'), pulse.flash);
+    gl.uniform3fv(loc('uFlashColor'), hexToRgb(s.flashColor));
+    gl.uniform1f(loc('uInvert'), pulse.invert);
     gl.uniform1i(loc('uDither'), dither ? 1 : 0);
 
     gl.drawArrays(gl.TRIANGLES, 0, 3);
