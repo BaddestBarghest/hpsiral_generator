@@ -18,7 +18,10 @@ interface Base<K extends string> {
 
 const FONT_OPTIONS = [...FONTS.map((f) => ({ value: f.id, label: f.label })), { value: CUSTOM_FONT_ID, label: 'Your font' } as const];
 
-const SPIRAL_MODES = ['archimedean', 'logarithmic', 'power'] as const;
+/** Patterns with arms (everything but concentric rings). */
+const SPIRAL_MODES = ['archimedean', 'logarithmic', 'power', 'tunnel', 'globe'] as const;
+/** Shapes with a count (sides or points). */
+const COUNTED_SHAPES = ['polygon', 'star'] as const;
 
 export interface RangeParam<K extends string = string> extends Base<K> {
   type: 'range';
@@ -78,6 +81,8 @@ const PATTERNS = [
   { value: 'logarithmic', label: 'Logarithmic spiral' },
   { value: 'power', label: 'Power-law spiral' },
   { value: 'concentric', label: 'Concentric circles' },
+  { value: 'tunnel', label: 'Tunnel' },
+  { value: 'globe', label: 'Globe (3D)' },
 ] as const;
 
 const DIRECTIONS = [
@@ -109,9 +114,12 @@ export const schema = [
     options: [
       { value: 'round', label: 'Round' },
       { value: 'polygon', label: 'Polygon' },
+      { value: 'star', label: 'Star' },
+      { value: 'heart', label: 'Heart' },
     ],
   },
-  { key: 'sides', label: 'Sides', group: 'Spiral', section: 'Shape', type: 'range', min: 3, max: 12, step: 1, default: 6, showIf: { shape: ['polygon'] } },
+  { key: 'sides', label: 'Count', group: 'Spiral', section: 'Shape', type: 'range', min: 3, max: 12, step: 1, default: 6, help: 'Sides of the polygon or points of the star.', showIf: { shape: COUNTED_SHAPES } },
+  { key: 'shapeDepth', label: 'Depth', group: 'Spiral', section: 'Shape', type: 'range', min: 0.1, max: 0.8, step: 0.01, default: 0.45, help: 'How deep the star’s points cut in.', showIf: { shape: ['star'] } },
   { key: 'arms', label: 'Arms', group: 'Spiral', section: 'Shape', type: 'range', min: 1, max: 16, step: 1, default: 2, showIf: { mode: SPIRAL_MODES } },
   { key: 'density', label: 'Density', group: 'Spiral', section: 'Shape', type: 'range', min: 0.5, max: 30, step: 0.1, default: 10, curve: 'log' },
   { key: 'exponent', label: 'Power-law exponent', group: 'Spiral', section: 'Shape', type: 'range', min: 0.2, max: 1.5, step: 0.01, default: 0.4, help: 'Lower = tighter centre; 1 = Archimedean.', showIf: { mode: ['power'] } },
@@ -123,7 +131,7 @@ export const schema = [
   { key: 'mirror', label: 'Mirror (clockwise ↔ anticlockwise)', group: 'Spiral', section: 'Shape', type: 'toggle', default: false, showIf: { mode: SPIRAL_MODES } },
   { key: 'speed', label: 'Speed', group: 'Spiral', section: 'Motion', type: 'range', min: 0, max: 4, step: 0.01, default: 0.5, unit: 'cycles/s', curve: 'sq' },
   { key: 'direction', label: 'Direction', group: 'Spiral', section: 'Motion', type: 'select', default: 'inward', options: DIRECTIONS },
-  { key: 'twist', label: 'Twist', group: 'Spiral', section: 'Motion', type: 'range', min: -3, max: 3, step: 0.01, default: 0, unit: 'turns', help: 'Bends the arms more the further out they are.', showIf: { mode: ['logarithmic', 'power'] } },
+  { key: 'twist', label: 'Twist', group: 'Spiral', section: 'Motion', type: 'range', min: -3, max: 3, step: 0.01, default: 0, unit: 'turns', help: 'Bends the arms more the further out they are.', showIf: { mode: ['logarithmic', 'power', 'tunnel'] } },
   { key: 'wobble', label: 'Wobble', group: 'Spiral', section: 'Motion', type: 'range', min: 0, max: 1, step: 0.01, default: 0, help: 'Ripples the arms sideways.' },
   { key: 'wobbleFreq', label: 'Wobble ripples', group: 'Spiral', section: 'Motion', type: 'range', min: 0.5, max: 12, step: 0.1, default: 3, curve: 'log' },
   { key: 'wobbleSpeed', label: 'Wobble speed', group: 'Spiral', section: 'Motion', type: 'range', min: 0, max: 3, step: 0.01, default: 0.5, unit: 'cycles/s', curve: 'sq' },

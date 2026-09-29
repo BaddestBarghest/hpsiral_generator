@@ -3,6 +3,7 @@ import { COLOR_PERIOD, type TimelineState } from '../engine/timeline';
 import { colorStepPhase, pulses, type Pulses } from '../engine/rhythm';
 import { isWall, textFrame, type TextFrame } from '../engine/text';
 import { lcm } from '../engine/math';
+import { heartRadii } from './shapes';
 import { TextLayer } from './TextLayer';
 import { averageRgb, hexToRgb, PALETTE_CYCLE, PALETTE_SAMPLES, paletteStrip, type RGB } from './color';
 import {
@@ -29,8 +30,12 @@ const SOURCES = { scene: withFinish(sceneSrc), post: withFinish(postSrc), blur: 
  * shader entirely rather than skipped by a runtime branch, which some drivers still pay for.
  */
 interface SceneVariant {
+  /** The globe's code is only compiled when a spiral uses it. */
+  GLOBE: 0 | 1;
   /** Draw the auxiliary spiral. */
   S2: 0 | 1;
+  /** Outline shape. */
+  SHAPE: (typeof SHAPES)[keyof typeof SHAPES];
   /** Straight to the screen: apply the finishing steps (vignette, text, pulses, dither). */
   FINISH: 0 | 1;
   TEXT_MODE: TextMode;
@@ -53,7 +58,10 @@ const TRAIL_HALF_LIVES_TO_FADE = 8;
 const TEXT_MODE = { none: 0, texture: 1, layer: 2 } as const;
 type TextMode = (typeof TEXT_MODE)[keyof typeof TEXT_MODE];
 
-const MODES = { archimedean: 0, logarithmic: 1, concentric: 2, power: 3 } as const;
+const MODES = { archimedean: 0, logarithmic: 1, concentric: 2, power: 3, tunnel: 4, globe: 5 } as const;
+const SHAPES = { round: 0, polygon: 1, star: 2, heart: 3 } as const;
+/** Outline tables for the shapes without a formula. */
+const OUTLINES: Partial<Record<Settings['shape'], Float32Array>> = { heart: heartRadii() };
 const COLOR_MODES = { static: 0, gradient: 1, cycle: 2, kaleido: 3 } as const;
 const BLENDS = { normal: 0, add: 1, multiply: 2, screen: 3, difference: 4 } as const;
 
@@ -218,6 +226,8 @@ export class Renderer {
     gl.viewport(0, 0, width, height);
     gl.bindVertexArray(this.vao);
     const S2 = s.s2Enabled ? 1 : 0;
+    const SHAPE = SHAPES[s.shape];
+    const GLOBE = s.mode === 'globe' || (s.s2Enabled && s.s2Mode === 'globe') ? 1 : 0;
 
     if (!spiralTrail && !textTrail && !glow) {
       // Nothing to keep or blur: one pass straight to the screen.
@@ -225,7 +235,7 @@ export class Renderer {
       this.textHistoryValid = false;
       if (!show) return;
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      const prog = this.program('scene', { S2, FINISH: 1, TEXT_MODE: textOn ? TEXT_MODE.texture : TEXT_MODE.none });
+      const prog = this.program('scene', { GLOBE, S2, SHAPE, FINISH: 1, TEXT_MODE: textOn ? TEXT_MODE.texture : TEXT_MODE.none });
       this.setScene(prog, s, tl, width, height);
       this.setFinish(prog, s, pulse, text, this.text.texture);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -234,7 +244,7 @@ export class Renderer {
 
     this.ensureTargets(width, height);
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.sceneTarget!.framebuffer);
-    this.setScene(this.program('scene', { S2, FINISH: 0, TEXT_MODE: TEXT_MODE.none }), s, tl, width, height);
+    this.setScene(this.program('scene', { GLOBE, S2, SHAPE, FINISH: 0, TEXT_MODE: TEXT_MODE.none }), s, tl, width, height);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     let present = this.sceneTarget!;
@@ -400,8 +410,10 @@ export class Renderer {
 
     gl.uniform2f(loc('uResolution'), width, height);
     gl.uniform1f(loc('uZoom'), s.zoom * pulses(s, tl.beatPhase).zoom);
-    gl.uniform1i(loc('uShape'), s.shape === 'polygon' ? 1 : 0);
     gl.uniform1f(loc('uSides'), s.sides);
+    gl.uniform1f(loc('uShapeDepth'), s.shapeDepth);
+    const outline = OUTLINES[s.shape];
+    if (outline) gl.uniform1fv(loc('uOutline[0]'), outline);
     gl.uniform1f(loc('uExponent'), s.exponent);
     gl.uniform1f(loc('uCenterSpread'), s.centerSpread);
     gl.uniform1f(loc('uCenterTaper'), s.centerTaper);

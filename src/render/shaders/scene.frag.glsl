@@ -1,5 +1,6 @@
 #version 300 es
-// Variant switches (defined by the renderer): S2 = draw the auxiliary spiral,
+// Variant switches (defined by the renderer): GLOBE = the globe pattern is in use (its code is
+// only compiled then); S2 = draw the auxiliary spiral,
 // FINISH = drawing straight to the screen, so apply the finishing steps here (TEXT_MODE: see finish.glsl).
 precision highp float;
 
@@ -8,9 +9,13 @@ out vec4 outColor;
 uniform vec2 uResolution;   // backing-store pixels
 uniform float uZoom;
 
-// Geometry shared by both spirals.
-uniform int uShape;          // 0 round, 1 polygon
-uniform float uSides;
+// Geometry shared by both spirals. The outline shape is fixed per compiled variant:
+// SHAPE 0 round, 1 polygon, 2 star, 3 heart.
+uniform float uSides;        // polygon sides, star points
+uniform float uShapeDepth;   // star: how far the points cut in (0..1)
+#if SHAPE == 3
+uniform float uOutline[128]; // heart outline radius per direction (render/shapes.ts)
+#endif
 uniform float uExponent;     // power-law exponent k (radial = density * rho^k)
 uniform float uCenterSpread; // c in rho = sqrt(r^2 + c^2); 0 = unmodified
 uniform float uCenterTaper;  // 0..1, how much arm width shrinks towards the centre
@@ -21,7 +26,7 @@ uniform float uWobbleFreq;   // ripples per unit of distance (or around the circ
 uniform float uWobblePhase;  // cycles
 
 struct Spiral {
-  int mode;       // 0 archimedean, 1 logarithmic, 2 concentric, 3 power law
+  int mode;       // 0 archimedean, 1 logarithmic, 2 concentric, 3 power law, 4 tunnel, 5 globe
   float arms;
   float density;
   float flow;     // cycles, wrapped at a multiple of the arm count
@@ -55,6 +60,11 @@ const float KALEIDO_SECTORS = 6.0;
 const float GRADIENT_SCALE = 1.5; // palette steps per unit of distance from centre
 const float TAPER_RADIUS = 1.0;   // arms reach full width at this distance (short screen half = 1)
 const float WOBBLE_TURNS = 0.15;  // arm displacement at full wobble, in turns
+const float TUNNEL_DEPTH = 0.5;   // tunnel: rings per unit of density at distance 1 (they crowd towards the centre)
+const float GLOBE_RADIUS = 0.9;   // globe: size (short screen half = 1)
+const float GLOBE_TILT = 0.5;     // globe: spin axis tipped towards the viewer (radians), so a pole shows
+const float GLOBE_WIND = 0.3;     // globe: how tightly the stripes wind towards the poles, per unit of density
+const vec3 GLOBE_LIGHT = vec3(-0.36, 0.46, 0.81); // globe: light from the upper left, towards the viewer (unit length)
 
 // Palette at a continuous position: integers are pure colours, fractions crossfade. The
 // texture repeats, so any position wraps round the palette.
@@ -104,22 +114,69 @@ struct Field {
   float rho;    // softened radial distance
   float theta;  // angle including mirror
   float r;      // plain distance from centre
+  float inside; // globe: 1 on the ball, 0 around it (1 for every other pattern)
+  float shade;  // globe: lighting on the ball (1 elsewhere)
 };
 
 // p: position in pattern space; pixel: pattern-space units per screen pixel.
 Field spiralField(vec2 p, Spiral sp, float pixel) {
   Field F;
+  F.inside = 1.0;
+  F.shade = 1.0;
   F.r = max(length(p), 1e-5);
   float thetaRaw = atan(p.y, p.x);
   F.theta = thetaRaw * sp.mirror;
 
-  // Polygon: measure distance along each edge's normal so contours become straight edges.
-  float rs = F.r;
-  if (uShape == 1) {
-    float seg = TAU / uSides;
-    float a = mod(thetaRaw, seg) - 0.5 * seg;
-    rs = F.r * cos(a) / cos(0.5 * seg);
+#if GLOBE
+  if (sp.mode == 5) {
+    // Globe: its own mapping (outline shape, centre spread, twist and wobble don't apply).
+    // Stripes wound round a spinning ball like loxodromes (lines crossing every
+    // meridian at the same angle), converging on the poles.
+    vec2 q = p / GLOBE_RADIUS;
+    vec3 n = vec3(q, sqrt(max(1.0 - dot(q, q), 0.0)));
+    float ct = cos(GLOBE_TILT), st = sin(GLOBE_TILT);
+    vec3 w = vec3(n.x, ct * n.y + st * n.z, -st * n.y + ct * n.z); // spin axis = w.y
+    vec2 u = normalize(vec2(w.x, w.z) + 1e-6);                       // (cos, sin) of longitude
+    float lon = atan(u.y, u.x) * sp.mirror;
+    float lat = clamp(w.y, -0.999, 0.999);
+    float mercator = 0.5 * log((1.0 + lat) / (1.0 - lat));
+    float smoothG = sp.density * GLOBE_WIND * mercator + sp.flow; // flow spins the ball
+    // Longitude jumps at its seam; its gradient comes from its (cos, sin) instead, which doesn't.
+    vec2 gradLon = vec2(u.x * dFdx(u.y) - u.y * dFdx(u.x), u.x * dFdy(u.y) - u.y * dFdy(u.x)) * sp.mirror;
+    F.v = sp.arms * lon / TAU + smoothG;
+    F.dv = length(vec2(dFdx(smoothG), dFdy(smoothG)) + sp.arms / TAU * gradLon);
+    F.theta = lon;
+    F.inside = 1.0 - smoothstep(GLOBE_RADIUS - pixel, GLOBE_RADIUS, F.r);
+    // Soft lighting with a little rim so the ball reads as round.
+    float light = max(dot(n, GLOBE_LIGHT), 0.0);
+    F.shade = mix(1.0, 0.25 + 0.75 * light, F.inside);
+    return F;
   }
+#endif
+
+  // Shapes: divide the distance by the outline's radius in this direction, so every contour
+  // is a scaled copy of the outline.
+  float rs = F.r;
+#if SHAPE == 1
+  // Polygon: measure distance along each edge's normal so contours become straight edges.
+  float seg = TAU / uSides;
+  float a = mod(thetaRaw, seg) - 0.5 * seg;
+  rs = F.r * cos(a) / cos(0.5 * seg);
+#elif SHAPE == 2
+  // Star: straight edges from each point (radius 1, pointing up first) in to a valley.
+  float seg = TAU / uSides;
+  float halfSeg = 0.5 * seg;
+  float a = abs(mod(thetaRaw - 0.25 * TAU + halfSeg, seg) - halfSeg);
+  vec2 tip = vec2(1.0, 0.0);
+  vec2 edge = (1.0 - uShapeDepth) * vec2(cos(halfSeg), sin(halfSeg)) - tip;
+  vec2 dir = vec2(cos(a), sin(a));
+  rs = F.r * (dir.x * edge.y - dir.y * edge.x) / (tip.x * edge.y - tip.y * edge.x);
+#elif SHAPE == 3
+  // Heart: outline traced on the CPU, one radius per direction.
+  float h = fract(thetaRaw / TAU) * 128.0;
+  int i0 = int(floor(h));
+  rs = F.r / mix(uOutline[i0], uOutline[(i0 + 1) % 128], fract(h));
+#endif
   // Softened radius keeps stripes from bunching up where radial frequency explodes.
   float c = uCenterSpread;
   F.rho = sqrt(rs * rs + c * c);
@@ -127,6 +184,8 @@ Field spiralField(vec2 p, Spiral sp, float pixel) {
   float radial;
   if (sp.mode == 1) radial = sp.density * 0.5 * log(F.rho);
   else if (sp.mode == 3) radial = sp.density * (pow(F.rho, uExponent) - pow(c, uExponent));
+  // Tunnel: equal steps in depth (1 / distance), so rings crowd towards the vanishing point.
+  else if (sp.mode == 4) radial = -sp.density * TUNNEL_DEPTH / F.rho;
   else radial = sp.density * (F.rho - c); // "- c" keeps rings anchored at the centre
 
   // Twist and wobble bend the arms; everything here is continuous (no atan seam), so
@@ -162,6 +221,17 @@ float filterWidth(float dv, float baseWidth) {
   return max(min(0.5 * dv + 0.5 * uSoftness * thinnest, 0.5), 1e-5);
 }
 
+// Arm coverage of a pixel (0 = gap, 1 = arm), plus the stripe indices its arm and gap colours
+// come from (near a cycle boundary, the neighbouring arm or gap is the one being blended in).
+float coverage(Spiral sp, Field F, float b, out float armK, out float gapK) {
+  float k = floor(F.v);
+  float f = F.v - k;
+  float cov = armCoverage(f, b, filterWidth(F.dv, sp.width));
+  armK = f > 0.5 * (1.0 + b) ? k + 1.0 : k;
+  gapK = f < 0.5 * b ? k - 1.0 : k;
+  return cov * F.inside;
+}
+
 float kaleidoSector(float theta) {
   // Sector boundaries include the atan seam (theta = ±pi), hiding the arm-index jump there.
   return floor(fract(theta / TAU) * KALEIDO_SECTORS);
@@ -187,31 +257,26 @@ void main() {
   // ── Spiral 1: arms over gaps ────────────────────────────────────────────
   Spiral s1 = uSpiral[0];
   Field F = spiralField(p, s1, pixel);
-  float k = floor(F.v);
-  float f = F.v - k;
   float b = armWidth(s1, F.r);
-  float cov = armCoverage(f, b, filterWidth(F.dv, s1.width));
-  // Near a cycle boundary the neighbouring arm/gap is the one being blended in.
-  float armK = f > 0.5 * (1.0 + b) ? k + 1.0 : k;
-  float gapK = f < 0.5 * b ? k - 1.0 : k;
+  float armK, gapK;
+  float cov = coverage(s1, F, b, armK, gapK);
   float g = F.rho * GRADIENT_SCALE;
   float sector = kaleidoSector(F.theta);
   vec3 col = mix(bandColor(1, s1, gapK, g, sector), bandColor(0, s1, armK, g, sector), cov);
   // Where a whole cycle shrinks to ~1-2px, fade to the average colour instead of moiré.
-  col = mix(col, uAvg1, smoothstep(0.6, 1.0, F.dv));
+  col = mix(col, uAvg1, smoothstep(0.6, 1.0, F.dv) * F.inside);
+  col *= F.shade;
 
   // ── Auxiliary spiral: arms only, blended over the main spiral ───────────
 #if S2
   {
     Spiral s2 = uSpiral[1];
     Field F2 = spiralField(p, s2, pixel);
-    float k2 = floor(F2.v);
-    float f2 = F2.v - k2;
     float b2 = armWidth(s2, F2.r);
     float fade2 = smoothstep(0.6, 1.0, F2.dv);
-    float cov2 = mix(armCoverage(f2, b2, filterWidth(F2.dv, s2.width)), b2, fade2);
-    float armK2 = f2 > 0.5 * (1.0 + b2) ? k2 + 1.0 : k2;
-    vec3 c2 = mix(bandColor(2, s2, armK2, F2.rho * GRADIENT_SCALE, kaleidoSector(F2.theta)), uAvg2, fade2);
+    float armK2, gapK2;
+    float cov2 = mix(coverage(s2, F2, b2, armK2, gapK2), b2 * F2.inside, fade2);
+    vec3 c2 = mix(bandColor(2, s2, armK2, F2.rho * GRADIENT_SCALE, kaleidoSector(F2.theta)), uAvg2, fade2) * F2.shade;
     col = blend(col, c2, cov2 * uS2Opacity, uS2Blend);
   }
 #endif
