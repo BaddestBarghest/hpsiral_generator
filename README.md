@@ -4,10 +4,11 @@ A hypnotic spiral generator that runs in the browser. It renders with WebGL2 on 
 
 > ⚠️ **Photosensitivity warning:** this app shows moving patterns and changing colours that may trigger seizures in people with photosensitive epilepsy.
 
-## Features (MVP)
-- Archimedean, logarithmic and concentric patterns: arms, density, stripe balance, softness, zoom, speed and direction
-- A palette of 2–8 colours, shown as solid bands or a smooth gradient, with hue roll
-- Edges antialiased in the shader, with an automatic fade where stripes get thinner than a pixel (no moiré)
+## Features
+- Power-law, Archimedean, logarithmic and concentric patterns. Controls: arms, density, exponent, center spread, center taper (pointy core), arm width, softness, zoom, speed and direction.
+- Separate colours for arms and gaps (1–3 each). Each can be static per stripe, a gradient along the arm, cycling or kaleidoscopic, with its own shift speed. Global hue roll.
+- Adding colours never changes the geometry.
+- Edges antialiased in the shader, with an automatic fade only where a whole stripe cycle shrinks below a pixel (no moiré)
 - The render loop runs in a Web Worker (`OffscreenCanvas`), so UI work never stalls the animation. Add `?inline` to the URL to render on the main thread instead.
 - Live recording to MP4 or WebM with `MediaRecorder`
 - Settings are saved in `localStorage`
@@ -17,7 +18,7 @@ A hypnotic spiral generator that runs in the browser. It renders with WebGL2 on 
 | Key | Action |
 | --- | --- |
 | Space | Play / pause |
-| S | Settings |
+| C | Customization panel |
 | R | Start / stop recording |
 | F | Fullscreen |
 | H | Hide controls (click the spiral to show them again) |

@@ -1,11 +1,11 @@
-import { defaults, sanitize, type Settings } from './schema';
+import { defaults, migrate, sanitize, type Settings } from './schema';
 
 const KEY = 'hypnogen:settings:v1';
 
 function load(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? sanitize(JSON.parse(raw)) : defaults();
+    return raw ? sanitize(migrate(JSON.parse(raw))) : defaults();
   } catch {
     return defaults();
   }

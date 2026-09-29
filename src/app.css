@@ -11,30 +11,45 @@
 @source "../node_modules/flowbite-svelte-icons/dist/CloseOutline.svelte";
 @source "../node_modules/flowbite-svelte-icons/dist/PlaySolid.svelte";
 
-/* flowbite-svelte styles its accents with the `primary` scale. */
+/* App theme: charcoal #242423 / #333533 with gold #f5cb5c accent.
+   flowbite-svelte draws accents from `primary` and dark surfaces from `gray`
+   (gray-800 panels/buttons, gray-900 drawer, gray-700 borders/hover). */
 @theme {
-  --color-primary-50: var(--color-violet-50);
-  --color-primary-100: var(--color-violet-100);
-  --color-primary-200: var(--color-violet-200);
-  --color-primary-300: var(--color-violet-300);
-  --color-primary-400: var(--color-violet-400);
-  --color-primary-500: var(--color-violet-500);
-  --color-primary-600: var(--color-violet-600);
-  --color-primary-700: var(--color-violet-700);
-  --color-primary-800: var(--color-violet-800);
-  --color-primary-900: var(--color-violet-900);
-  --color-primary-950: var(--color-violet-950);
+  --color-primary-50: #fefaeb;
+  --color-primary-100: #fdf1cc;
+  --color-primary-200: #fbe39a;
+  --color-primary-300: #f8d672;
+  --color-primary-400: #f6cf66;
+  --color-primary-500: #f5cb5c;
+  --color-primary-600: #f5cb5c; /* dark-mode buttons/toggles use 600: keep the exact brand gold */
+  --color-primary-700: #d9ad3c;
+  --color-primary-800: #b68d26;
+  --color-primary-900: #8f6d1c;
+  --color-primary-950: #5c4510;
+
+  /* Warm neutral greys ending in the two brand charcoals. */
+  --color-gray-50: #f7f7f6;
+  --color-gray-100: #ececea;
+  --color-gray-200: #d9d9d6;
+  --color-gray-300: #bdbdb8;
+  --color-gray-400: #9d9e98;
+  --color-gray-500: #7a7b76;
+  --color-gray-600: #5b5d59;
+  --color-gray-700: #454744;
+  --color-gray-800: #333533;
+  --color-gray-900: #242423;
+  --color-gray-950: #1a1a19;
 }
 
-/* The flowbite plugin hard-codes blue slider thumbs; match the violet accent instead. */
+/* The flowbite plugin hard-codes blue slider thumbs; use the accent instead. */
 input[type="range"]:not(:disabled)::-webkit-slider-thumb {
-  background: var(--color-violet-500);
+  background: var(--color-primary-500);
 }
 input[type="range"]:not(:disabled)::-moz-range-thumb {
-  background: var(--color-violet-500);
+  background: var(--color-primary-500);
 }
 input[type="range"]:not(:disabled)::-moz-range-progress {
-  background: var(--color-violet-500);
+  background: var(--color-primary-500);
 }
 
 .settings-scroll {

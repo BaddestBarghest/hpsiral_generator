@@ -28,7 +28,6 @@
     <Range
       {id}
       size="sm"
-      color="violet"
       min={param.min}
       max={param.max}
       step={param.step}
@@ -79,7 +78,7 @@
           color="alternative"
           class="h-9 w-9 p-0"
           aria-label="Add colour"
-          onclick={() => onchange([...colors, '#7c3aed'])}
+          onclick={() => onchange([...colors, '#f5cb5c'])}
         >
           <PlusOutline class="h-4 w-4" />
         </Button>

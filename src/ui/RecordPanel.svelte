@@ -49,9 +49,9 @@
         <Label for="rec-bitrate" class="text-sm">Bitrate</Label>
         <span class="text-xs tabular-nums text-gray-400">{prefs.bitrateMbps} Mbps</span>
       </div>
-      <Range id="rec-bitrate" size="sm" color="violet" min={2} max={50} step={1} disabled={recording} bind:value={prefs.bitrateMbps} />
+      <Range id="rec-bitrate" size="sm" min={2} max={50} step={1} disabled={recording} bind:value={prefs.bitrateMbps} />
     </div>
-    <Button class="w-full" color={recording ? 'red' : 'primary'} onclick={ontoggle}>
+    <Button class="w-full {recording ? '' : 'text-gray-900!'}" color={recording ? 'red' : 'primary'} onclick={ontoggle}>
       {#if recording}
         <StopSolid class="me-2 h-4 w-4" /> Stop and save ({mmss(elapsed)})
       {:else}

@@ -7,6 +7,8 @@ interface Base<K extends string> {
   key: K;
   label: string;
   group: Group;
+  /** Optional sub-heading within the group; shown when it differs from the previous param's. */
+  section?: string;
   help?: string;
 }
 
@@ -39,22 +41,33 @@ export interface PaletteParam<K extends string = string> extends Base<K> {
 
 export type Param = RangeParam | SelectParam | ToggleParam | PaletteParam;
 
-export const MAX_PALETTE = 8;
+/** Colours per band (arms or gaps). */
+export const MAX_BAND_COLORS = 3;
+
+const COLOR_MODES = [
+  { value: 'static', label: 'Static (one colour per stripe)' },
+  { value: 'gradient', label: 'Gradient along the arm' },
+  { value: 'cycle', label: 'Cycle through colours' },
+  { value: 'kaleido', label: 'Kaleidoscopic' },
+] as const;
 
 export const schema = [
   // ── Spiral ────────────────────────────────────────────────────────────
   {
-    key: 'mode', label: 'Pattern', group: 'Spiral', type: 'select', default: 'archimedean',
+    key: 'mode', label: 'Pattern', group: 'Spiral', type: 'select', default: 'power',
     options: [
       { value: 'archimedean', label: 'Archimedean spiral' },
       { value: 'logarithmic', label: 'Logarithmic spiral' },
+      { value: 'power', label: 'Power-law spiral' },
       { value: 'concentric', label: 'Concentric circles' },
     ],
   },
   { key: 'arms', label: 'Arms', group: 'Spiral', type: 'range', min: 1, max: 16, step: 1, default: 2, help: 'Ignored for concentric circles.' },
-  { key: 'density', label: 'Density', group: 'Spiral', type: 'range', min: 0.5, max: 30, step: 0.1, default: 6 },
-  { key: 'centerSpread', label: 'Center spread', group: 'Spiral', type: 'range', min: 0, max: 0.6, step: 0.01, default: 0.1, help: 'Widens the stripes near the middle so they don’t bunch up.' },
-  { key: 'balance', label: 'Stripe balance', group: 'Spiral', type: 'range', min: 0.05, max: 0.95, step: 0.01, default: 0.5, help: 'Width of the first colour band.' },
+  { key: 'density', label: 'Density', group: 'Spiral', type: 'range', min: 0.5, max: 30, step: 0.1, default: 10 },
+  { key: 'exponent', label: 'Power-law exponent', group: 'Spiral', type: 'range', min: 0.2, max: 1.5, step: 0.01, default: 0.4, help: 'Power-law spiral only. Lower = tighter centre; 1 = Archimedean.' },
+  { key: 'centerSpread', label: 'Center spread', group: 'Spiral', type: 'range', min: 0, max: 0.6, step: 0.01, default: 0, help: 'Widens the stripes near the middle so they don’t bunch up.' },
+  { key: 'centerTaper', label: 'Center taper', group: 'Spiral', type: 'range', min: 0, max: 1, step: 0.01, default: 0.6, help: 'Thins the arms towards the middle. Higher = pointier core, 0 = constant width.' },
+  { key: 'balance', label: 'Arm width', group: 'Spiral', type: 'range', min: 0.05, max: 0.95, step: 0.01, default: 0.5, help: 'Share of each cycle taken by the arm; the rest is the gap.' },
   { key: 'softness', label: 'Edge softness', group: 'Spiral', type: 'range', min: 0, max: 1, step: 0.01, default: 0 },
   { key: 'zoom', label: 'Zoom', group: 'Spiral', type: 'range', min: 0.25, max: 4, step: 0.01, default: 1 },
   { key: 'speed', label: 'Speed', group: 'Spiral', type: 'range', min: 0, max: 4, step: 0.01, default: 0.5, unit: 'cycles/s' },
@@ -68,15 +81,15 @@ export const schema = [
   { key: 'mirror', label: 'Mirror (reverse twist)', group: 'Spiral', type: 'toggle', default: false },
 
   // ── Colour ────────────────────────────────────────────────────────────
-  { key: 'palette', label: 'Palette', group: 'Colour', type: 'palette', minColors: 2, maxColors: MAX_PALETTE, default: ['#ffffff', '#000000'] },
-  {
-    key: 'colorMode', label: 'Colour mode', group: 'Colour', type: 'select', default: 'bands',
-    options: [
-      { value: 'bands', label: 'Solid bands' },
-      { value: 'gradient', label: 'Smooth gradient' },
-    ],
-  },
-  { key: 'hueRoll', label: 'Hue roll speed', group: 'Colour', type: 'range', min: 0, max: 1, step: 0.005, default: 0, unit: 'rev/s' },
+  // Colours never change the geometry: each cycle is one arm stripe + one gap,
+  // and each band paints itself from its own colour list.
+  { key: 'armColors', label: 'Colours', group: 'Colour', section: 'Arms', type: 'palette', minColors: 1, maxColors: MAX_BAND_COLORS, default: ['#ffffff'] },
+  { key: 'armColorMode', label: 'Colour mode', group: 'Colour', section: 'Arms', type: 'select', default: 'static', options: COLOR_MODES, help: 'Only matters with 2 or more colours.' },
+  { key: 'armShift', label: 'Colour shift speed', group: 'Colour', section: 'Arms', type: 'range', min: 0, max: 2, step: 0.01, default: 0, unit: 'cycles/s' },
+  { key: 'gapColors', label: 'Colours', group: 'Colour', section: 'Gaps', type: 'palette', minColors: 1, maxColors: MAX_BAND_COLORS, default: ['#000000'] },
+  { key: 'gapColorMode', label: 'Colour mode', group: 'Colour', section: 'Gaps', type: 'select', default: 'static', options: COLOR_MODES },
+  { key: 'gapShift', label: 'Colour shift speed', group: 'Colour', section: 'Gaps', type: 'range', min: 0, max: 2, step: 0.01, default: 0, unit: 'cycles/s' },
+  { key: 'hueRoll', label: 'Hue roll speed', group: 'Colour', section: 'Effects', type: 'range', min: 0, max: 1, step: 0.005, default: 0, unit: 'rev/s', help: 'Rotates the hue of every colour.' },
 
   // ── Display ───────────────────────────────────────────────────────────
   { key: 'renderScale', label: 'Render scale', group: 'Display', type: 'range', min: 0.25, max: 1, step: 0.05, default: 1 },
@@ -111,6 +124,18 @@ export function defaults(): Settings {
     out[p.key] = p.type === 'palette' ? [...p.default] : p.default;
   }
   return out as Settings;
+}
+
+/** Carries settings saved by older versions forward; run before `sanitize`. */
+export function migrate(input: unknown): unknown {
+  if (!input || typeof input !== 'object') return input;
+  const raw = input as Record<string, unknown>;
+  // ≤0.1: one `palette` of alternating bands → first colour paints the arms, second the gaps.
+  if (Array.isArray(raw.palette) && !('armColors' in raw)) {
+    const [arm, gap] = raw.palette as unknown[];
+    return { ...raw, armColors: [arm], gapColors: [gap ?? '#000000'] };
+  }
+  return raw;
 }
 
 const HEX = /^#[0-9a-f]{6}$/i;

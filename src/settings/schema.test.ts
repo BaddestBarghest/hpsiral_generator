@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaults, sanitize, schema, type Param } from './schema';
+import { defaults, migrate, sanitize, schema, type Param } from './schema';
 
 describe('schema', () => {
   it('has unique keys', () => {
@@ -25,19 +25,30 @@ describe('schema', () => {
       density: 'abc',
       mode: 'not-a-mode',
       mirror: 'yes',
-      palette: ['#FF0000', 'red', 42, '#00ff00'],
+      armColors: ['#FF0000', 'red', 42, '#00ff00'],
+      armColorMode: 'rainbow',
       unknownKey: 1,
     });
     expect(s.arms).toBe(16);
     expect(s.density).toBe(defaults().density);
     expect(s.mode).toBe(defaults().mode);
     expect(s.mirror).toBe(false);
-    expect(s.palette).toEqual(['#ff0000', '#00ff00']);
+    expect(s.armColors).toEqual(['#ff0000', '#00ff00']);
+    expect(s.armColorMode).toBe('static');
     expect(s).not.toHaveProperty('unknownKey');
   });
 
-  it('rejects palettes that are too short', () => {
-    expect(sanitize({ palette: ['#123456'] }).palette).toEqual(defaults().palette);
+  it('caps colour lists at 3 and rejects empty ones', () => {
+    expect(sanitize({ gapColors: ['#111111', '#222222', '#333333', '#444444'] }).gapColors).toHaveLength(3);
+    expect(sanitize({ gapColors: [] }).gapColors).toEqual(defaults().gapColors);
+  });
+
+  it('migrates the old single palette to arm and gap colours', () => {
+    const s = sanitize(migrate({ palette: ['#FFFFFF', '#000000', '#7c3aed'], colorMode: 'bands', arms: 3 }));
+    expect(s.armColors).toEqual(['#ffffff']);
+    expect(s.gapColors).toEqual(['#000000']);
+    expect(s.arms).toBe(3);
+    expect(s).not.toHaveProperty('palette');
   });
 
   it('survives non-object input', () => {

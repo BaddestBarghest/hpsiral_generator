@@ -18,6 +18,6 @@
     <p>Stop immediately if you feel unwell. Don't use it while driving or operating machinery.</p>
   </div>
   {#snippet footer()}
-    <Button onclick={onaccept}>I understand</Button>
+    <Button class="text-gray-900!" onclick={onaccept}>I understand</Button>
   {/snippet}
 </Modal>

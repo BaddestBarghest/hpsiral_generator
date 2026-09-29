@@ -163,7 +163,7 @@
       case 'h':
         uiHidden = !uiHidden;
         break;
-      case 's':
+      case 'c':
         drawerOpen = !drawerOpen;
         break;
       case 'r':
@@ -210,7 +210,7 @@
     <Button size="sm" color="dark" class="p-2" onclick={() => (uiHidden = true)} aria-label="Hide controls (H)" title="Hide controls (H). Click the spiral to show them again.">
       <EyeSlashOutline class="h-5 w-5" />
     </Button>
-    <Button size="sm" color="dark" class="p-2" onclick={() => (drawerOpen = !drawerOpen)} aria-label="Settings (S)" title="Settings (S)">
+    <Button size="sm" color="dark" class="p-2" onclick={() => (drawerOpen = !drawerOpen)} aria-label="Customization (C)" title="Customization (C)">
       <AdjustmentsHorizontalOutline class="h-5 w-5" />
     </Button>
   </div>

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { defaults } from '../settings/schema';
-import { initialTimeline, step, type TimelineState } from './timeline';
+import { COLOR_PERIOD, FLOW_PERIOD, initialTimeline, step, type TimelineState } from './timeline';
 import { LiveClock, MAX_LIVE_DT } from './clock';
 
 function run(dts: number[]): TimelineState {
-  const s = { ...defaults(), speed: 1.37, hueRoll: 0.21 };
+  const s = { ...defaults(), speed: 1.37, hueRoll: 0.21, armShift: 0.43, gapShift: 1.9 };
   return dts.reduce((tl, dt) => step(tl, s, dt), initialTimeline());
 }
 
@@ -27,14 +27,27 @@ describe('timeline', () => {
     expect(b.time).toBeCloseTo(2, 9);
     expect(a.flowPhase).toBeCloseTo(b.flowPhase, 9);
     expect(a.huePhase).toBeCloseTo(b.huePhase, 9);
+    expect(a.armColorPhase).toBeCloseTo(b.armColorPhase, 9);
+    expect(a.gapColorPhase).toBeCloseTo(b.gapColorPhase, 9);
   });
 
-  it('keeps phases wrapped to [0, 1)', () => {
+  it('keeps phases wrapped to their periods', () => {
     const tl = run(Array.from({ length: 1000 }, () => 0.1));
-    for (const v of [tl.flowPhase, tl.huePhase]) {
+    const ranges: [number, number][] = [
+      [tl.flowPhase, FLOW_PERIOD],
+      [tl.huePhase, 1],
+      [tl.armColorPhase, COLOR_PERIOD],
+      [tl.gapColorPhase, COLOR_PERIOD],
+    ];
+    for (const [v, period] of ranges) {
       expect(v).toBeGreaterThanOrEqual(0);
-      expect(v).toBeLessThan(1);
+      expect(v).toBeLessThan(period);
     }
+  });
+
+  it('wraps flow at a multiple of every arm count', () => {
+    for (let arms = 1; arms <= 16; arms++) expect(FLOW_PERIOD % arms).toBe(0);
+    for (let n = 1; n <= 3; n++) expect(COLOR_PERIOD % n).toBe(0);
   });
 
   it('reverses flow for outward direction', () => {
@@ -42,7 +55,7 @@ describe('timeline', () => {
     const inward = step(initialTimeline(), { ...s, direction: 'inward', speed: 0.25 }, 1);
     const outward = step(initialTimeline(), { ...s, direction: 'outward', speed: 0.25 }, 1);
     expect(inward.flowPhase).toBeCloseTo(0.25);
-    expect(outward.flowPhase).toBeCloseTo(0.75);
+    expect(outward.flowPhase).toBeCloseTo(FLOW_PERIOD - 0.25);
   });
 });
 
