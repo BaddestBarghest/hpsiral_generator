@@ -93,3 +93,43 @@ describe('tap tempo alignment', () => {
     expect(at(12)).toBe(12);
   });
 });
+
+describe('frame-rate cap', () => {
+  /** Frames drawn in one second of display frames with the given gaps (ms, repeating). */
+  function drawnPerSecond(gaps: number[], maxFps: number): number {
+    const clock = new LiveClock();
+    let t = 0;
+    let drawn = 0;
+    clock.tick(t, maxFps);
+    for (let i = 0; t < 1000; i++) {
+      t += gaps[i % gaps.length];
+      if (clock.tick(t, maxFps) !== null) drawn++;
+    }
+    return drawn;
+  }
+
+  it('does not halve a jittery 60 Hz display when capped at 60', () => {
+    // Worker frames often arrive unevenly around 16.7 ms.
+    expect(drawnPerSecond([18.4, 14.9], 60)).toBeGreaterThanOrEqual(58);
+    expect(drawnPerSecond([16.7], 60)).toBeGreaterThanOrEqual(59);
+  });
+
+  it('still caps faster displays', () => {
+    expect(drawnPerSecond([1000 / 144], 60)).toBeLessThanOrEqual(61);
+    expect(drawnPerSecond([1000 / 144], 60)).toBeGreaterThanOrEqual(55);
+    expect(drawnPerSecond([1000 / 120], 30)).toBeLessThanOrEqual(31);
+    expect(drawnPerSecond([1000 / 120], 30)).toBeGreaterThanOrEqual(29);
+  });
+
+  it('never loses animation time: drawn steps add up to the real time', () => {
+    const clock = new LiveClock();
+    let t = 0;
+    let advanced = 0;
+    clock.tick(t, 60);
+    for (let i = 0; i < 300; i++) {
+      t += i % 2 ? 14.9 : 18.4;
+      advanced += clock.tick(t, 60) ?? 0;
+    }
+    expect(advanced).toBeCloseTo(t / 1000, 1);
+  });
+});
