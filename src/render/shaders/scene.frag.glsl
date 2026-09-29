@@ -206,7 +206,7 @@ void main() {
   // Where a whole cycle shrinks to ~1-2px, fade to the average colour instead of moiré.
   col = mix(col, uAvg1, smoothstep(0.6, 1.0, F.dv));
 
-  // ── Spiral 2: arms only, blended over spiral 1 ──────────────────────────
+  // ── Auxiliary spiral: arms only, blended over the main spiral ───────────
   if (uS2Enabled) {
     Spiral s2 = uSpiral[1];
     Field F2 = spiralField(p, s2, pixel);

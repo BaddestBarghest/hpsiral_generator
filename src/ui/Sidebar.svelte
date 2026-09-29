@@ -37,7 +37,7 @@
   modal={false}
   outsideclose={false}
   dismissable={false}
-  class="flex w-[25rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden bg-gray-900/95 p-4 pe-2 backdrop-blur"
+  class="flex w-[27rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden bg-gray-900/95 p-4 pe-2 backdrop-blur"
   aria-label="Customization"
 >
   <!-- Header, tab bar and footer stay put; only the tab content scrolls. -->
@@ -53,16 +53,16 @@
   >
     {#each groups as group, gi (group)}
       <TabItem open={gi === 0} title={group} activeClass={activeTab} inactiveClass={inactiveTab}>
+        <!-- Headings come from visible controls only, so a section with nothing to show disappears. -->
+        {@const visible = byGroup[group].filter((p) => isVisible(p, settings))}
         <div class="space-y-5">
-          {#each byGroup[group] as p, i (p.key)}
-            {#if p.section && p.section !== byGroup[group][i - 1]?.section}
+          {#each visible as p, i (p.key)}
+            {#if p.section && p.section !== visible[i - 1]?.section}
               <h3 class="border-b border-gray-700 pb-1 text-xs font-semibold tracking-wider text-primary-500 uppercase {i > 0 ? 'pt-3' : ''}">
                 {p.section}
               </h3>
             {/if}
-            {#if isVisible(p, settings)}
-              <Control param={p} value={settings[p.key as keyof Settings]} onchange={(v) => set(p.key, v)} />
-            {/if}
+            <Control param={p} value={settings[p.key as keyof Settings]} onchange={(v) => set(p.key, v)} />
           {/each}
           {#if group === 'Output'}
             {@render output()}

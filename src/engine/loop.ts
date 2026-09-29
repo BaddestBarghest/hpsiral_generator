@@ -28,7 +28,7 @@ export function flowPeriod(s: Settings): number {
   return p;
 }
 
-/** Same as `flowPeriod`, for the second spiral (arms only; its gaps are see-through). */
+/** Same as `flowPeriod`, for the auxiliary spiral (arms only; its gaps are see-through). */
 export function flowPeriod2(s: Settings): number {
   const perStripe = s.s2Colors.length > 1 && (s.s2ColorMode === 'static' || s.s2ColorMode === 'kaleido');
   if (!perStripe) return 1;
@@ -62,8 +62,8 @@ function motions(s: Settings): Motion[] {
     { key: 'armShift', label: 'Arm colour shift', rate: s.armColors.length > 1 ? s.armShift : 0, period: s.armColors.length, toSetting: same },
     { key: 'gapShift', label: 'Gap colour shift', rate: s.gapColors.length > 1 ? s.gapShift : 0, period: s.gapColors.length, toSetting: same },
     // Hidden or invisible motions don't constrain the loop either.
-    { key: 's2Speed', label: 'Spiral 2 speed', rate: s.s2Enabled ? s.s2Speed * mean : 0, period: flowPeriod2(s), toSetting: (r) => r / mean },
-    { key: 's2Shift', label: 'Spiral 2 colour shift', rate: s.s2Enabled && s.s2Colors.length > 1 ? s.s2Shift : 0, period: s.s2Colors.length, toSetting: same },
+    { key: 's2Speed', label: 'Auxiliary spiral speed', rate: s.s2Enabled ? s.s2Speed * mean : 0, period: flowPeriod2(s), toSetting: (r) => r / mean },
+    { key: 's2Shift', label: 'Auxiliary spiral colour shift', rate: s.s2Enabled && s.s2Colors.length > 1 ? s.s2Shift : 0, period: s.s2Colors.length, toSetting: same },
     { key: 'wobbleSpeed', label: 'Wobble speed', rate: s.wobble > 0 ? s.wobbleSpeed : 0, period: 1, toSetting: same },
     // Ramp cycles and flash/inversion/zoom pulses all repeat every `beats` beats.
     { key: 'bpm', label: 'Tempo (BPM)', rate: beats > 0 ? beatsPerSecond(s) : 0, period: beats, toSetting: (r) => r * 60 },

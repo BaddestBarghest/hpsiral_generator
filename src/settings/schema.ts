@@ -1,7 +1,7 @@
 // Single source of truth for every user-facing parameter.
 // The UI, persistence/validation and renderer uniforms are all driven from this table.
 
-export type Group = 'Spiral' | 'Colour' | 'Spiral 2' | 'Rhythm' | 'Effects' | 'Output';
+export type Group = 'Spiral' | 'Colour' | 'Auxiliary spiral' | 'Rhythm' | 'Effects' | 'Output';
 
 interface Base<K extends string> {
   key: K;
@@ -117,23 +117,23 @@ export const schema = [
   { key: 'gapShift', label: 'Colour shift speed', group: 'Colour', section: 'Gaps', type: 'range', min: 0, max: 2, step: 0.01, default: 0, unit: 'cycles/s' },
   { key: 'hueRoll', label: 'Hue roll speed', group: 'Colour', section: 'Effects', type: 'range', min: 0, max: 1, step: 0.005, default: 0, unit: 'rev/s', help: 'Rotates the hue of every colour.' },
 
-  // ── Spiral 2 ──────────────────────────────────────────────────────────
+  // ── Auxiliary spiral ──────────────────────────────────────────────────
   // A second pattern drawn over the first: arms only (its gaps are see-through).
   // Shares zoom, shape, exponent, centre spread/taper, softness, twist and wobble.
-  { key: 's2Enabled', label: 'Show second spiral', group: 'Spiral 2', type: 'toggle', default: false },
-  { key: 's2Mode', label: 'Pattern', group: 'Spiral 2', type: 'select', default: 'archimedean', options: PATTERNS, showIf: { s2Enabled: ['true'] } },
-  { key: 's2Arms', label: 'Arms', group: 'Spiral 2', type: 'range', min: 1, max: 16, step: 1, default: 1, showIf: { s2Enabled: ['true'], s2Mode: SPIRAL_MODES } },
-  { key: 's2Density', label: 'Density', group: 'Spiral 2', type: 'range', min: 0.5, max: 30, step: 0.1, default: 4, showIf: { s2Enabled: ['true'] } },
-  { key: 's2Width', label: 'Arm width', group: 'Spiral 2', type: 'range', min: 0.05, max: 0.95, step: 0.01, default: 0.2, showIf: { s2Enabled: ['true'] } },
-  { key: 's2Speed', label: 'Speed', group: 'Spiral 2', type: 'range', min: 0, max: 4, step: 0.01, default: 0.3, unit: 'cycles/s', showIf: { s2Enabled: ['true'] } },
-  { key: 's2Direction', label: 'Direction', group: 'Spiral 2', type: 'select', default: 'outward', options: DIRECTIONS, showIf: { s2Enabled: ['true'] } },
-  { key: 's2Mirror', label: 'Mirror (reverse twist)', group: 'Spiral 2', type: 'toggle', default: true, showIf: { s2Enabled: ['true'], s2Mode: SPIRAL_MODES } },
-  { key: 's2Colors', label: 'Colours', group: 'Spiral 2', section: 'Colour & blending', type: 'palette', minColors: 1, maxColors: MAX_BAND_COLORS, default: ['#f5cb5c'], showIf: { s2Enabled: ['true'] } },
-  { key: 's2ColorMode', label: 'Colour mode', group: 'Spiral 2', section: 'Colour & blending', type: 'select', default: 'static', options: COLOR_MODES, showIf: { s2Enabled: ['true'] } },
-  { key: 's2Shift', label: 'Colour shift speed', group: 'Spiral 2', section: 'Colour & blending', type: 'range', min: 0, max: 2, step: 0.01, default: 0, unit: 'cycles/s', showIf: { s2Enabled: ['true'] } },
-  { key: 's2Opacity', label: 'Opacity', group: 'Spiral 2', section: 'Colour & blending', type: 'range', min: 0, max: 1, step: 0.01, default: 0.8, showIf: { s2Enabled: ['true'] } },
+  { key: 's2Enabled', label: 'Show auxiliary spiral', group: 'Auxiliary spiral', type: 'toggle', default: false },
+  { key: 's2Mode', label: 'Pattern', group: 'Auxiliary spiral', type: 'select', default: 'archimedean', options: PATTERNS, showIf: { s2Enabled: ['true'] } },
+  { key: 's2Arms', label: 'Arms', group: 'Auxiliary spiral', type: 'range', min: 1, max: 16, step: 1, default: 1, showIf: { s2Enabled: ['true'], s2Mode: SPIRAL_MODES } },
+  { key: 's2Density', label: 'Density', group: 'Auxiliary spiral', type: 'range', min: 0.5, max: 30, step: 0.1, default: 4, showIf: { s2Enabled: ['true'] } },
+  { key: 's2Width', label: 'Arm width', group: 'Auxiliary spiral', type: 'range', min: 0.05, max: 0.95, step: 0.01, default: 0.2, showIf: { s2Enabled: ['true'] } },
+  { key: 's2Speed', label: 'Speed', group: 'Auxiliary spiral', type: 'range', min: 0, max: 4, step: 0.01, default: 0.3, unit: 'cycles/s', showIf: { s2Enabled: ['true'] } },
+  { key: 's2Direction', label: 'Direction', group: 'Auxiliary spiral', type: 'select', default: 'outward', options: DIRECTIONS, showIf: { s2Enabled: ['true'] } },
+  { key: 's2Mirror', label: 'Mirror (reverse twist)', group: 'Auxiliary spiral', type: 'toggle', default: true, showIf: { s2Enabled: ['true'], s2Mode: SPIRAL_MODES } },
+  { key: 's2Colors', label: 'Colours', group: 'Auxiliary spiral', section: 'Colour & blending', type: 'palette', minColors: 1, maxColors: MAX_BAND_COLORS, default: ['#f5cb5c'], showIf: { s2Enabled: ['true'] } },
+  { key: 's2ColorMode', label: 'Colour mode', group: 'Auxiliary spiral', section: 'Colour & blending', type: 'select', default: 'static', options: COLOR_MODES, showIf: { s2Enabled: ['true'] } },
+  { key: 's2Shift', label: 'Colour shift speed', group: 'Auxiliary spiral', section: 'Colour & blending', type: 'range', min: 0, max: 2, step: 0.01, default: 0, unit: 'cycles/s', showIf: { s2Enabled: ['true'] } },
+  { key: 's2Opacity', label: 'Opacity', group: 'Auxiliary spiral', section: 'Colour & blending', type: 'range', min: 0, max: 1, step: 0.01, default: 0.8, showIf: { s2Enabled: ['true'] } },
   {
-    key: 's2Blend', label: 'Blend mode', group: 'Spiral 2', section: 'Colour & blending', type: 'select', default: 'normal', showIf: { s2Enabled: ['true'] },
+    key: 's2Blend', label: 'Blend mode', group: 'Auxiliary spiral', section: 'Colour & blending', type: 'select', default: 'normal', showIf: { s2Enabled: ['true'] },
     options: [
       { value: 'normal', label: 'Normal' },
       { value: 'add', label: 'Add (lighten)' },
@@ -216,7 +216,7 @@ type ValueOf<P> = P extends { type: 'range' } ? number
 export type Settings = { -readonly [P in Entry as P['key']]: ValueOf<P> };
 export type SettingKey = keyof Settings;
 
-export const groups: Group[] = ['Spiral', 'Colour', 'Spiral 2', 'Rhythm', 'Effects', 'Output'];
+export const groups: Group[] = ['Spiral', 'Colour', 'Auxiliary spiral', 'Rhythm', 'Effects', 'Output'];
 
 export function defaults(): Settings {
   const out: Record<string, unknown> = {};

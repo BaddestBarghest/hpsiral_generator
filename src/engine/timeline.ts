@@ -20,7 +20,7 @@ export interface TimelineState {
   time: number;
   /** Pattern flow phase in cycles, wrapped to [0, FLOW_PERIOD). */
   flowPhase: number;
-  /** Second spiral's flow phase, same wrapping. */
+  /** Auxiliary spiral's flow phase, same wrapping. */
   flowPhase2: number;
   /** Hue rotation in revolutions, wrapped to [0, 1). */
   huePhase: number;
@@ -28,7 +28,7 @@ export interface TimelineState {
   armColorPhase: number;
   /** Gap colour shift in palette steps, wrapped to [0, COLOR_PERIOD). */
   gapColorPhase: number;
-  /** Second spiral's colour shift, wrapped to [0, COLOR_PERIOD). */
+  /** Auxiliary spiral's colour shift, wrapped to [0, COLOR_PERIOD). */
   s2ColorPhase: number;
   /** Wobble ripple travel in cycles, wrapped to [0, 1). */
   wobblePhase: number;

@@ -7,7 +7,7 @@ A hypnotic spiral generator that runs in the browser. It renders with WebGL2 on 
 ## Features
 - Power-law, Archimedean, logarithmic and concentric patterns. Controls: arms, density, exponent, center spread, center taper (pointy core), arm width, softness, zoom, speed and direction.
 - Round or polygon (3–12 sides) shapes for every pattern
-- A second spiral drawn over the first, with its own pattern, arms, density, speed, direction and 1–3 colours, plus opacity and blend modes (normal, add, multiply, screen, difference)
+- An auxiliary spiral drawn over the main one, with its own pattern, arms, density, speed, direction and 1–3 colours, plus opacity and blend modes (normal, add, multiply, screen, difference)
 - Effects: twist, wobble, afterimage trails (time-based, so the same at any frame rate; renders pre-roll so trails and loops stay seamless), vignette and a centre dot
 - Rhythm: master tempo with tap-to-set BPM, speed ramps (smooth or linear, integrated exactly), soft flash or strobe, inversion and zoom pulses. Flashing is capped at 3 per second (WCAG 2.3.1) unless explicitly unlocked
 - Separate colours for arms and gaps (1–3 each). Each can be static per stripe, a gradient along the arm, cycling or kaleidoscopic, with its own shift speed. Global hue roll.
