@@ -20,7 +20,7 @@ export interface FileSink {
  * chunks may be positioned `{ type: 'write', position, data }` objects.
  */
 export async function openFileSink(handle: FileSystemFileHandle): Promise<FileSink> {
-  const file = await handle.createWritable();
+  const file = await openWritable(handle);
   let closed = false;
   const stream = new WritableStream({
     write: (chunk) => file.write(chunk),
@@ -34,10 +34,29 @@ export async function openFileSink(handle: FileSystemFileHandle): Promise<FileSi
     stream,
     async discard() {
       if (!closed) await file.abort().catch(() => {});
-      const removable = handle as FileSystemFileHandle & { remove?: () => Promise<void> };
-      await removable.remove?.().catch(() => {});
+      await removeFile(handle);
     },
   };
+}
+
+/**
+ * `createWritable`, retried once after explicitly asking for write access: Chrome
+ * sometimes hands out a picker handle whose write permission still needs confirming.
+ */
+async function openWritable(handle: FileSystemFileHandle): Promise<FileSystemWritableFileStream> {
+  try {
+    return await handle.createWritable();
+  } catch (e) {
+    if (!(e instanceof DOMException && e.name === 'NotAllowedError') || !handle.requestPermission) throw e;
+    const state = await handle.requestPermission({ mode: 'readwrite' }).catch(() => 'denied' as const);
+    if (state !== 'granted') throw e;
+    return await handle.createWritable();
+  }
+}
+
+/** Deletes a picked file, e.g. the empty one the save dialog created (best effort; Chromium only). */
+export async function removeFile(handle: FileSystemFileHandle): Promise<void> {
+  await handle.remove?.().catch(() => {});
 }
 
 /** Triggers a browser download of `blob`. */

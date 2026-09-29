@@ -15,7 +15,7 @@
   import { createRenderHost, type RenderHost } from './render/host';
   import type { FromRender, Viewport } from './render/protocol';
   import { LiveRecorder, supportedFormats, type RecordPrefs } from './record/liveRecorder';
-  import { openFileSink, saveBlob, timestampedName, type FileSink } from './record/save';
+  import { openFileSink, removeFile, saveBlob, timestampedName, type FileSink } from './record/save';
   import { RENDER_FORMATS, type RenderRequest } from './record/renderJob';
   import Sidebar from './ui/Sidebar.svelte';
   import SafetyGate from './ui/SafetyGate.svelte';
@@ -60,6 +60,8 @@
   let rendering = $state<RenderState | null>(null);
   /** File being streamed into (save dialog), if any; deleted again if the render doesn't finish. */
   let fileSink: FileSink | null = null;
+  /** True while the save dialog is open, so a second click can't start a second render. */
+  let choosingFile = $state(false);
 
   const formats = supportedFormats();
   let recordPrefs = $state<RecordPrefs>({ formatId: formats[0]?.id ?? '', fps: 60, bitrateMbps: 16 });
@@ -110,12 +112,41 @@
   }
 
   async function startRender(req: RenderRequest) {
-    if (!host || rendering) return;
+    if (!host || rendering || choosingFile) return;
+    choosingFile = true;
+    try {
+      await beginRender(host, req);
+    } finally {
+      choosingFile = false;
+    }
+  }
+
+  /**
+   * Remembers that this browser gave us a save-dialog file it then wouldn't let us write,
+   * so later renders skip the dialog and download directly instead of asking twice.
+   */
+  const DIRECT_DOWNLOAD_KEY = 'hypnogen:directDownload';
+  function pickerBlocked(): boolean {
+    try {
+      return localStorage.getItem(DIRECT_DOWNLOAD_KEY) === '1';
+    } catch {
+      return false;
+    }
+  }
+  function rememberPickerBlocked() {
+    try {
+      localStorage.setItem(DIRECT_DOWNLOAD_KEY, '1');
+    } catch {
+      /* storage unavailable: we'll just try the dialog again next time */
+    }
+  }
+
+  async function beginRender(host: RenderHost, req: RenderRequest) {
     const format = RENDER_FORMATS[req.format];
     let fileName = timestampedName('hypno', format.ext);
     // Where supported, stream straight to a file on disk so long 4K renders don't fill memory.
     let sink: FileSink | null = null;
-    if (window.showSaveFilePicker) {
+    if (window.showSaveFilePicker && !pickerBlocked()) {
       let handle: FileSystemFileHandle | undefined;
       try {
         handle = await window.showSaveFilePicker({
@@ -131,7 +162,12 @@
           sink = await openFileSink(handle);
           fileName = handle.name;
         } catch (e) {
-          error = `Couldn't write to that file, so it will download instead. (${e instanceof Error ? e.message : e})`;
+          // The dialog already created an empty file there; don't leave it behind.
+          await removeFile(handle);
+          fileName = handle.name;
+          rememberPickerBlocked();
+          console.warn('Writing to the chosen file failed; downloading instead.', e);
+          error = `Your browser blocked saving to that folder, so ${handle.name} will download instead. Future renders download directly.`;
         }
       }
     }
@@ -317,22 +353,24 @@
       <h3 class="mt-8 mb-4 border-b border-gray-700 pb-1 text-xs font-semibold tracking-wider text-primary-500 uppercase">
         Render to file
       </h3>
-      <RenderPanel busy={!!rendering || !!recorder} {settings} onrender={startRender} />
+      <RenderPanel busy={!!rendering || !!recorder || choosingFile} {settings} onrender={startRender} />
     {/snippet}
   </Sidebar>
 {/if}
 
-{#if error}
-  <Toast color="red" class="fixed bottom-4 left-1/2 z-50 -translate-x-1/2" dismissable onclose={() => (error = null)}>
-    {error}
-  </Toast>
-{/if}
-
-{#if notice}
-  <Toast color="green" class="fixed bottom-4 left-1/2 z-50 -translate-x-1/2" dismissable onclose={() => (notice = null)}>
-    {notice}
-  </Toast>
-{/if}
+<!-- Stacked, so a "saved" notice doesn't cover an earlier warning. -->
+<div class="fixed bottom-4 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col items-center gap-2">
+  {#if error}
+    <Toast color="red" class="max-w-md" dismissable onclose={() => (error = null)}>
+      {error}
+    </Toast>
+  {/if}
+  {#if notice}
+    <Toast color="green" class="max-w-md" dismissable onclose={() => (notice = null)}>
+      {notice}
+    </Toast>
+  {/if}
+</div>
 
 <RenderProgress
   open={!!rendering}
