@@ -28,7 +28,7 @@ self.onmessage = (e: MessageEvent<ToRender>) => {
         loop?.setPlaying(msg.playing);
         break;
       case 'render':
-        void task?.start(msg.job, msg.fileHandle);
+        void task?.start(msg.job, msg.output);
         break;
       case 'cancelRender':
         task?.cancel();

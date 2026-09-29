@@ -15,7 +15,7 @@
   import { createRenderHost, type RenderHost } from './render/host';
   import type { FromRender, Viewport } from './render/protocol';
   import { LiveRecorder, supportedFormats, type RecordPrefs } from './record/liveRecorder';
-  import { saveBlob, timestampedName } from './record/save';
+  import { openFileSink, saveBlob, timestampedName, type FileSink } from './record/save';
   import { RENDER_FORMATS, type RenderRequest } from './record/renderJob';
   import Sidebar from './ui/Sidebar.svelte';
   import SafetyGate from './ui/SafetyGate.svelte';
@@ -58,6 +58,8 @@
     cancelling: boolean;
   }
   let rendering = $state<RenderState | null>(null);
+  /** File being streamed into (save dialog), if any; deleted again if the render doesn't finish. */
+  let fileSink: FileSink | null = null;
 
   const formats = supportedFormats();
   let recordPrefs = $state<RecordPrefs>({ formatId: formats[0]?.id ?? '', fps: 60, bitrateMbps: 16 });
@@ -86,16 +88,25 @@
           notice = `Saved ${rendering.fileName}`;
         }
         rendering = null;
+        fileSink = null;
         break;
       case 'renderCancelled':
         rendering = null;
         notice = 'Render cancelled.';
+        void discardFile();
         break;
       case 'renderError':
         rendering = null;
         error = `Render failed: ${msg.message}`;
+        void discardFile();
         break;
     }
+  }
+
+  async function discardFile() {
+    const sink = fileSink;
+    fileSink = null;
+    await sink?.discard();
   }
 
   async function startRender(req: RenderRequest) {
@@ -103,22 +114,31 @@
     const format = RENDER_FORMATS[req.format];
     let fileName = timestampedName('hypno', format.ext);
     // Where supported, stream straight to a file on disk so long 4K renders don't fill memory.
-    let fileHandle: FileSystemFileHandle | undefined;
+    let sink: FileSink | null = null;
     if (window.showSaveFilePicker) {
+      let handle: FileSystemFileHandle | undefined;
       try {
-        fileHandle = await window.showSaveFilePicker({
+        handle = await window.showSaveFilePicker({
           suggestedName: fileName,
           types: [{ description: format.label, accept: { [format.mimeType]: [`.${format.ext}`] } }],
         });
-        fileName = fileHandle.name;
       } catch (e) {
         if (e instanceof DOMException && e.name === 'AbortError') return; // user closed the dialog
-        fileHandle = undefined; // picker unavailable here (e.g. iframe); fall back to download
+        // Picker unavailable here (e.g. in an iframe): fall back to a download.
+      }
+      if (handle) {
+        try {
+          sink = await openFileSink(handle);
+          fileName = handle.name;
+        } catch (e) {
+          error = `Couldn't write to that file, so it will download instead. (${e instanceof Error ? e.message : e})`;
+        }
       }
     }
     const total = Math.max(1, Math.round(req.fps * req.duration));
     rendering = { frame: 0, total, startedAt: performance.now(), fileName, mimeType: format.mimeType, cancelling: false };
-    host.startRender({ ...req, settings: req.settings ?? $state.snapshot(settings) }, fileHandle);
+    fileSink = sink;
+    host.startRender({ ...req, settings: req.settings ?? $state.snapshot(settings) }, sink?.stream);
   }
 
   function cancelRender() {

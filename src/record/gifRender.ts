@@ -12,11 +12,11 @@ const SAMPLE_STRIDE = 3;
 
 /**
  * Renders `job` as a GIF that repeats forever. Returns the bytes, or `null` when they
- * were written to `fileHandle`.
+ * were written to `output` (closed on success, aborted on failure).
  */
 export async function renderGif(
   job: RenderJob,
-  fileHandle: FileSystemFileHandle | undefined,
+  output: WritableStream | undefined,
   signal: AbortSignal,
   onProgress: (frame: number, total: number) => void,
 ): Promise<ArrayBuffer | null> {
@@ -62,16 +62,16 @@ export async function renderGif(
     gif.finish();
     const bytes = gif.bytes();
 
-    if (fileHandle) {
-      const writable = await fileHandle.createWritable();
-      await writable.write(bytes as Uint8Array<ArrayBuffer>);
-      await writable.close();
+    if (output) {
+      const writer = output.getWriter();
+      await writer.write(bytes);
+      await writer.close();
       return null;
     }
     return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
   } catch (err) {
-    const removable = fileHandle as (FileSystemFileHandle & { remove?: () => Promise<void> }) | undefined;
-    await removable?.remove?.().catch(() => {});
+    // Nothing was written yet (the GIF is written in one go at the end); release the file.
+    if (output && !output.locked) await output.abort(err).catch(() => {});
     throw signal.aborted ? new RenderCancelled() : err;
   } finally {
     renderer.destroy();

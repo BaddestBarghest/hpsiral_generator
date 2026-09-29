@@ -15,7 +15,7 @@ export class RenderTask {
     return this.controller !== null;
   }
 
-  async start(job: RenderJob, fileHandle?: FileSystemFileHandle): Promise<void> {
+  async start(job: RenderJob, output?: WritableStream): Promise<void> {
     if (this.controller) {
       this.emit({ type: 'renderError', message: 'A render is already in progress.' });
       return;
@@ -28,7 +28,7 @@ export class RenderTask {
         job.format === 'gif'
           ? (await import('../record/gifRender')).renderGif
           : (await import('../record/offlineRender')).renderOffline;
-      const buffer = await render(job, fileHandle, controller.signal, (frame, total) =>
+      const buffer = await render(job, output, controller.signal, (frame, total) =>
         this.emit({ type: 'renderProgress', frame, total }),
       );
       this.emit({ type: 'renderDone', buffer }, buffer ? [buffer] : []);

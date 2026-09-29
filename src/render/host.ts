@@ -11,7 +11,7 @@ export interface RenderHost {
   setViewport(v: Viewport): void;
   setPlaying(p: boolean): void;
   /** Starts an offline render; progress and the result arrive through `onEvent`. */
-  startRender(job: RenderJob, fileHandle?: FileSystemFileHandle): void;
+  startRender(job: RenderJob, output?: WritableStream): void;
   cancelRender(): void;
   destroy(): void;
 }
@@ -44,7 +44,7 @@ export function createRenderHost(canvas: HTMLCanvasElement, init: HostInit): Ren
       setSettings: (settings) => post({ type: 'settings', settings }),
       setViewport: (viewport) => post({ type: 'viewport', viewport }),
       setPlaying: (playing) => post({ type: 'playing', playing }),
-      startRender: (job, fileHandle) => post({ type: 'render', job, fileHandle }),
+      startRender: (job, output) => post({ type: 'render', job, output }, output ? [output] : []),
       cancelRender: () => post({ type: 'cancelRender' }),
       destroy: () => worker.terminate(),
     };
@@ -58,7 +58,7 @@ export function createRenderHost(canvas: HTMLCanvasElement, init: HostInit): Ren
     setSettings: (s) => loop.setSettings(s),
     setViewport: (v) => loop.setViewport(v),
     setPlaying: (p) => loop.setPlaying(p),
-    startRender: (job, fileHandle) => void task.start(job, fileHandle),
+    startRender: (job, output) => void task.start(job, output),
     cancelRender: () => task.cancel(),
     destroy: () => loop.destroy(),
   };

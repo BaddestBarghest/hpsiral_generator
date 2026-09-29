@@ -28,11 +28,11 @@ export async function supportedCodecs(width: number, height: number, fps: number
 
 /**
  * Renders `job` and returns the file as an ArrayBuffer, or `null` when it was
- * streamed straight into `fileHandle`.
+ * streamed into `output` (which is closed on success and aborted on failure).
  */
 export async function renderOffline(
   job: RenderJob,
-  fileHandle: FileSystemFileHandle | undefined,
+  output: WritableStream | undefined,
   signal: AbortSignal,
   onProgress: (frame: number, total: number) => void,
 ): Promise<ArrayBuffer | null> {
@@ -42,26 +42,25 @@ export async function renderOffline(
   const renderer = new Renderer(canvas);
   renderer.resize(job.width, job.height);
 
-  const writable = fileHandle ? await fileHandle.createWritable() : undefined;
-  const target: Target = writable ? new StreamTarget(writable, { chunked: true }) : new BufferTarget();
+  const target: Target = output ? new StreamTarget(output, { chunked: true }) : new BufferTarget();
   const format =
     codec === 'avc'
       ? // Streaming can seek back to write the index at the end; in-memory puts it up front for fast playback start.
-        new Mp4OutputFormat({ fastStart: writable ? false : 'in-memory' })
+        new Mp4OutputFormat({ fastStart: output ? false : 'in-memory' })
       : new WebMOutputFormat();
-  const output = new Output({ format, target });
+  const muxer = new Output({ format, target });
   const source = new CanvasSource(canvas, {
     codec,
     bitrate: job.bitrate,
     keyFrameInterval: 2,
     latencyMode: 'quality',
   });
-  output.addVideoTrack(source, { frameRate: job.fps });
+  muxer.addVideoTrack(source, { frameRate: job.fps });
 
   const total = frameCount(job);
   const dt = 1 / job.fps;
   try {
-    await output.start();
+    await muxer.start();
     let tl = warmUp(renderer, job.settings, job.fps);
     let lastReport = 0;
     for (let i = 0; i < total; i++) {
@@ -76,13 +75,11 @@ export async function renderOffline(
       }
     }
     source.close();
-    await output.finalize();
+    await muxer.finalize();
     return target instanceof BufferTarget ? target.buffer : null;
   } catch (err) {
-    if (output.state !== 'canceled' && output.state !== 'finalized') await output.cancel().catch(() => {});
-    // Don't leave a partial file behind (FileSystemHandle.remove is Chromium-only).
-    const removable = fileHandle as (FileSystemFileHandle & { remove?: () => Promise<void> }) | undefined;
-    await removable?.remove?.().catch(() => {});
+    // Cancelling the muxer aborts the output stream; the caller deletes the partial file.
+    if (muxer.state !== 'canceled' && muxer.state !== 'finalized') await muxer.cancel().catch(() => {});
     throw signal.aborted ? new RenderCancelled() : err;
   } finally {
     renderer.destroy();
