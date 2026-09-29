@@ -10,10 +10,11 @@
     onclose,
   }: { value: string; onchange: (hex: string) => void; onclose: () => void } = $props();
 
-  /** A few useful starting points: neutrals, the app's charcoal and gold, and bold hues. */
+  /** White and black, then saturated brights (they read best in spirals), plus the app's gold. */
   const PRESETS = [
-    '#ffffff', '#000000', '#e8eddf', '#333533', '#242423', '#f5cb5c',
-    '#e63946', '#ff006e', '#8338ec', '#3a86ff', '#1d3557', '#06d6a0',
+    '#ffffff', '#000000',
+    '#ff1744', '#ff9100', '#f5cb5c', '#ffea00', '#76ff03', '#00e676',
+    '#00e5ff', '#2979ff', '#651fff', '#d500f9', '#ff4081',
   ];
 
   let picker = $state<HTMLElement>();
