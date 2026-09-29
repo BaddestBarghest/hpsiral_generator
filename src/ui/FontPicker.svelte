@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { slide } from 'svelte/transition';
   import { ChevronDownOutline, CloseOutline, UploadOutline } from 'flowbite-svelte-icons';
+  import { dur, MEDIUM } from './motion';
   import { CUSTOM_FONT_ID, FONT_CATEGORIES, FONTS, type TextFontId } from '../settings/fonts';
   import { familyName, loadFont } from '../render/fontLoader';
   import { customFont, removeCustomFont, uploadCustomFont } from './customFont.svelte';
@@ -65,11 +67,11 @@
   {#key customFont.name}
     <span class="truncate text-lg leading-tight" style:font-family={css(isCustom ? CUSTOM_FONT_ID : current.id)}>{currentLabel}</span>
   {/key}
-  <ChevronDownOutline class="h-4 w-4 shrink-0 text-gray-400 transition-transform {open ? 'rotate-180' : ''}" />
+  <ChevronDownOutline class="h-4 w-4 shrink-0 text-gray-400 transition-transform duration-200 {open ? 'rotate-180' : ''}" />
 </button>
 
 {#if open}
-  <div class="space-y-3 rounded-lg border border-gray-700 bg-gray-800 p-3">
+  <div class="space-y-3 rounded-lg border border-gray-700 bg-gray-800 p-3" transition:slide={{ duration: dur(MEDIUM) }}>
     <div>
       <p class="mb-1.5 text-[11px] font-medium tracking-wide text-gray-400 uppercase">Your font</p>
       <div class="flex gap-1.5">

@@ -2,10 +2,13 @@
   import { Button, Helper, Label, Range, Select, Textarea, Toggle } from 'flowbite-svelte';
   import { CloseOutline, PlusOutline, UndoOutline } from 'flowbite-svelte-icons';
   import { fromSlider, SLIDER_RESOLUTION, toSlider, type Param } from '../settings/schema';
-  // The colour picker (and its library) loads the first time a colour is edited.
-  const colorEditor = () => import('./color/ColorEditor.svelte');
+  import { slide } from 'svelte/transition';
+  import { dur, MEDIUM } from './motion';
   import FontPicker from './FontPicker.svelte';
   import type { TextFontId } from '../settings/fonts';
+
+  // The colour picker (and its library) loads the first time a colour is edited.
+  const colorEditor = () => import('./color/ColorEditor.svelte');
 
   let {
     param,
@@ -171,9 +174,11 @@
       </button>
     </div>
     {#if editing === 0}
-      {#await colorEditor() then { default: ColorEditor }}
-        <ColorEditor value={value as string} onchange={(c) => onchange(c)} onclose={() => (editing = null)} />
-      {/await}
+      <div transition:slide={{ duration: dur(MEDIUM) }}>
+        {#await colorEditor() then { default: ColorEditor }}
+          <ColorEditor value={value as string} onchange={(c) => onchange(c)} onclose={() => (editing = null)} />
+        {/await}
+      </div>
     {/if}
   {:else if param.type === 'palette'}
     {@const colors = value as string[]}
@@ -208,9 +213,11 @@
       {/if}
     </div>
     {#if editing !== null && editing < colors.length}
-      {#await colorEditor() then { default: ColorEditor }}
-        <ColorEditor value={colors[editing]} onchange={(c) => setColor(editing!, c)} onclose={() => (editing = null)} />
-      {/await}
+      <div transition:slide={{ duration: dur(MEDIUM) }}>
+        {#await colorEditor() then { default: ColorEditor }}
+          <ColorEditor value={colors[editing]} onchange={(c) => setColor(editing!, c)} onclose={() => (editing = null)} />
+        {/await}
+      </div>
     {/if}
   {/if}
   {#if hint}

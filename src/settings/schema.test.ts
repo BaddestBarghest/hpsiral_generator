@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaults, fromSlider, isVisible, migrate, sanitize, schema, SLIDER_RESOLUTION, toSlider, type Param, type RangeParam } from './schema';
+import { defaults, fromSlider, groups, isVisible, migrate, sanitize, schema, SLIDER_RESOLUTION, toSlider, type Param, type RangeParam } from './schema';
 
 describe('schema', () => {
   it('has unique keys', () => {
@@ -107,5 +107,21 @@ describe('schema', () => {
     it('puts 1× zoom in the middle of a log slider', () => {
       expect(toSlider(zoom, 1)).toBe(SLIDER_RESOLUTION / 2);
     });
+  });
+});
+
+describe('menu layout', () => {
+  it('keeps each section of a tab in one piece (no section split by another)', () => {
+    for (const g of groups) {
+      const seen = new Set<string>();
+      let last: string | undefined;
+      for (const p of (schema as readonly Param[]).filter((q) => q.group === g)) {
+        if (p.section && p.section !== last) {
+          expect(seen.has(p.section), `${g} → ${p.section} appears twice`).toBe(false);
+          seen.add(p.section);
+        }
+        last = p.section;
+      }
+    }
   });
 });

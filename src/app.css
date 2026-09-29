@@ -76,3 +76,11 @@ body {
   background: #000;
   overscroll-behavior: none;
 }
+
+/* Tab bar: scrolls sideways without a visible scrollbar (wheel, arrow buttons or swipe). */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
