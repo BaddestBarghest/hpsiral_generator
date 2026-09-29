@@ -1,0 +1,32 @@
+{
+  "name": "hypnogenerator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hypnotic spiral generator with WebGL2 rendering and video recording",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@tsconfig/svelte": "^5.0.8",
+    "flowbite": "^3.1.2",
+    "flowbite-svelte": "^1.33.1",
+    "flowbite-svelte-icons": "^3.1.0",
+    "playwright": "^1.63.0",
+    "svelte": "^5.57.1",
+    "svelte-check": "^4.7.6",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  },
+  "dependencies": {
+    "mediabunny": "^1.60.0"
+  }
+}
