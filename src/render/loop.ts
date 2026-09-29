@@ -31,7 +31,7 @@ export class RenderLoop {
     private playing: boolean,
     private emit: Emit,
   ) {
-    this.renderer = new Renderer(canvas);
+    this.renderer = new Renderer(canvas, () => (this.dirty = true));
     this.applySize();
     this.frameId = raf(this.frame);
   }

@@ -5,6 +5,7 @@ import { Renderer } from '../render/Renderer';
 import { frameCount, type RenderJob } from './renderJob';
 import { RenderCancelled } from './renderErrors';
 import { warmUp } from './warmup';
+import { ensureTextFont } from '../render/fontLoader';
 
 const PALETTE_SAMPLES = 8;
 /** Every Nth pixel of each sample frame feeds the palette; plenty for 256 colours. */
@@ -30,6 +31,7 @@ export async function renderGif(
   const delayMs = Math.round(100 / job.fps) * 10; // GIF stores hundredths of a second
 
   try {
+    await ensureTextFont(settings);
     // Colours that change over time can't be covered by one 256-colour palette without
     // visibly stepping, so those GIFs get a palette per frame. Otherwise one shared palette
     // avoids edge flicker between frames and keeps the file smaller.

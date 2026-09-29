@@ -59,7 +59,11 @@ export class Renderer {
   private history: [RenderTarget | null, RenderTarget | null] = [null, null];
   private historyValid = false;
 
-  constructor(readonly canvas: AnyCanvas) {
+  /** `onNeedsRedraw`: something changed asynchronously (e.g. a font finished loading). */
+  constructor(
+    readonly canvas: AnyCanvas,
+    private onNeedsRedraw: () => void = () => {},
+  ) {
     this.gl = createContext(canvas);
     this.canvas.addEventListener('webglcontextlost', this.onLost as EventListener);
     this.canvas.addEventListener('webglcontextrestored', this.onRestored as EventListener);
@@ -85,7 +89,7 @@ export class Renderer {
     this.scene = createProgram(gl, FULLSCREEN_VS, sceneFs);
     this.post = createProgram(gl, FULLSCREEN_VS, postFs);
     this.vao = gl.createVertexArray()!;
-    this.text = new TextLayer(gl);
+    this.text = new TextLayer(gl, () => this.onNeedsRedraw());
   }
 
   get isLost(): boolean {

@@ -1,11 +1,5 @@
 import type { Settings } from '../settings/schema';
-
-const FONT_STACKS: Record<Settings['textFont'], string> = {
-  sans: 'system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-  serif: 'Georgia, "Times New Roman", Times, serif',
-  mono: 'ui-monospace, Consolas, "Courier New", monospace',
-  impact: 'Impact, Haettenschweiler, "Arial Narrow Bold", "Arial Black", sans-serif',
-};
+import { canvasFont, fontWeight, isFontReady, loadFont } from './fontLoader';
 
 /** Wrapped lines may use this share of the screen width. */
 const MAX_LINE_WIDTH = 0.9;
@@ -22,7 +16,11 @@ export class TextLayer {
   readonly texture: WebGLTexture;
   private key = '';
 
-  constructor(private gl: WebGL2RenderingContext) {
+  /** `onFontReady` is called when a font finishes downloading, so the frame can be redrawn. */
+  constructor(
+    private gl: WebGL2RenderingContext,
+    private onFontReady: () => void = () => {},
+  ) {
     this.texture = gl.createTexture()!;
     gl.bindTexture(gl.TEXTURE_2D, this.texture);
     // 1×1 transparent placeholder so the sampler is always complete.
@@ -36,7 +34,16 @@ export class TextLayer {
   /** Makes sure the texture shows `phrase` at the given size; cheap when nothing changed. */
   update(s: Settings, phrase: string, width: number, height: number): void {
     if (!phrase) return;
-    const key = JSON.stringify([phrase, s.textFont, s.textBold, s.textSize, s.textColor, s.textOutline, s.textOutlineColor, width, height]);
+    const weight = fontWeight(s.textFont, s.textBold);
+    const ready = isFontReady(s.textFont, weight);
+    if (!ready) {
+      // Draw with the fallback now; redraw with the real font once it arrives.
+      void loadFont(s.textFont, weight).then(() => {
+        this.key = '';
+        this.onFontReady();
+      });
+    }
+    const key = JSON.stringify([ready, phrase, s.textFont, weight, s.textSize, s.textColor, s.textOutline, s.textOutlineColor, width, height]);
     if (key === this.key) return;
     this.key = key;
     this.draw(s, phrase, width, height);
@@ -54,7 +61,7 @@ export class TextLayer {
     ctx.clearRect(0, 0, width, height);
 
     const fontPx = Math.max(4, s.textSize * Math.min(width, height));
-    ctx.font = `${s.textBold ? 700 : 400} ${fontPx}px ${FONT_STACKS[s.textFont]}`;
+    ctx.font = canvasFont(s.textFont, fontWeight(s.textFont, s.textBold), fontPx);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.lineJoin = 'round';

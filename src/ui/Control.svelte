@@ -3,6 +3,8 @@
   import { CloseOutline, PlusOutline } from 'flowbite-svelte-icons';
   import type { Param } from '../settings/schema';
   import ColorEditor from './color/ColorEditor.svelte';
+  import FontPicker from './FontPicker.svelte';
+  import type { FontId } from '../settings/fonts';
 
   let { param, value, onchange }: { param: Param; value: unknown; onchange: (v: unknown) => void } = $props();
 
@@ -85,6 +87,9 @@
       value={value as number}
       oninput={(e) => onchange(Number(e.currentTarget.value))}
     />
+  {:else if param.type === 'select' && param.picker === 'font'}
+    <Label for={id} class="text-sm">{param.label}</Label>
+    <FontPicker {id} value={value as FontId} onchange={(v) => onchange(v)} />
   {:else if param.type === 'select'}
     <Label for={id} class="text-sm">{param.label}</Label>
     <Select

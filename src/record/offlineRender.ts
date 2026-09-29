@@ -15,6 +15,7 @@ import { Renderer } from '../render/Renderer';
 import { frameCount, type RenderJob, type VideoCodec } from './renderJob';
 import { RenderCancelled } from './renderErrors';
 import { warmUp } from './warmup';
+import { ensureTextFont } from '../render/fontLoader';
 
 /** Which codecs this browser can encode at the given size/rate. */
 export async function supportedCodecs(width: number, height: number, fps: number, bitrate: number): Promise<VideoCodec[]> {
@@ -60,6 +61,7 @@ export async function renderOffline(
   const total = frameCount(job);
   const dt = 1 / job.fps;
   try {
+    await ensureTextFont(job.settings);
     await muxer.start();
     let tl = warmUp(renderer, job.settings, job.fps);
     let lastReport = 0;

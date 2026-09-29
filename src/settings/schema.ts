@@ -1,6 +1,8 @@
 // Single source of truth for every user-facing parameter.
 // The UI, persistence/validation and renderer uniforms are all driven from this table.
 
+import { BOLD_FONT_IDS, FONTS } from './fonts';
+
 export type Group = 'Spiral' | 'Colour' | 'Aux. spiral' | 'Rhythm' | 'Text' | 'Output';
 
 interface Base<K extends string> {
@@ -13,6 +15,8 @@ interface Base<K extends string> {
   /** Show the control only when each listed setting has one of the listed values. */
   showIf?: Readonly<Record<string, readonly string[]>>;
 }
+
+const FONT_OPTIONS = FONTS.map((f) => ({ value: f.id, label: f.label }));
 
 const SPIRAL_MODES = ['archimedean', 'logarithmic', 'power'] as const;
 
@@ -31,6 +35,8 @@ export interface SelectParam<K extends string = string, V extends string = strin
   type: 'select';
   options: readonly { value: V; label: string }[];
   default: V;
+  /** Render as a visual picker instead of a drop-down. */
+  picker?: 'font';
 }
 
 export interface ToggleParam<K extends string = string> extends Base<K> {
@@ -228,22 +234,14 @@ export const schema = [
       { value: 'pop', label: 'Pop' },
     ],
   },
-  {
-    key: 'textFont', label: 'Font', group: 'Text', section: 'Style', type: 'select', default: 'sans', showIf: { textEnabled: ['true'] },
-    options: [
-      { value: 'sans', label: 'Sans-serif' },
-      { value: 'serif', label: 'Serif' },
-      { value: 'mono', label: 'Monospace' },
-      { value: 'impact', label: 'Impact (condensed)' },
-    ],
-  },
-  { key: 'textBold', label: 'Bold', group: 'Text', section: 'Style', type: 'toggle', default: true, showIf: { textEnabled: ['true'] } },
+  { key: 'textFont', label: 'Font', group: 'Text', section: 'Style', type: 'select', picker: 'font', default: 'sans', options: FONT_OPTIONS, showIf: { textEnabled: ['true'] } },
+  { key: 'textBold', label: 'Bold', group: 'Text', section: 'Style', type: 'toggle', default: true, showIf: { textEnabled: ['true'], textFont: BOLD_FONT_IDS } },
   { key: 'textUppercase', label: 'Uppercase', group: 'Text', section: 'Style', type: 'toggle', default: false, showIf: { textEnabled: ['true'] } },
   { key: 'textSize', label: 'Size', group: 'Text', section: 'Style', type: 'range', min: 0.03, max: 0.4, step: 0.005, default: 0.12, showIf: { textEnabled: ['true'] } },
   { key: 'textY', label: 'Vertical position', group: 'Text', section: 'Style', type: 'range', min: -0.8, max: 0.8, step: 0.01, default: 0, help: 'Negative moves it down, positive up.', showIf: { textEnabled: ['true'] } },
   { key: 'textColor', label: 'Colour', group: 'Text', section: 'Style', type: 'color', default: '#ffffff', showIf: { textEnabled: ['true'] } },
   { key: 'textOpacity', label: 'Opacity', group: 'Text', section: 'Style', type: 'range', min: 0, max: 1, step: 0.01, default: 1, showIf: { textEnabled: ['true'] } },
-  { key: 'textOutline', label: 'Outline', group: 'Text', section: 'Style', type: 'range', min: 0, max: 0.3, step: 0.01, default: 0.08, help: 'Keeps text readable over the stripes.', showIf: { textEnabled: ['true'] } },
+  { key: 'textOutline', label: 'Outline', group: 'Text', section: 'Style', type: 'range', min: 0, max: 0.3, step: 0.01, default: 0, help: 'Keeps text readable over the stripes.', showIf: { textEnabled: ['true'] } },
   { key: 'textOutlineColor', label: 'Outline colour', group: 'Text', section: 'Style', type: 'color', default: '#000000', showIf: { textEnabled: ['true'] } },
   { key: 'textFlash', label: 'Flash when text appears', group: 'Text', section: 'Flash', type: 'toggle', default: false, help: 'A short flash of the whole screen as each phrase appears. Limited to 3 per second unless unlocked in Rhythm → Safety.', showIf: { textEnabled: ['true'] } },
   { key: 'textFlashColor', label: 'Colour', group: 'Text', section: 'Flash', type: 'color', default: '#ffffff', showIf: { textEnabled: ['true'], textFlash: ['true'] } },
