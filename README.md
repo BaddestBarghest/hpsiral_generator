@@ -32,7 +32,7 @@ npm run build    # outputs to dist/
 ```
 
 ## Deploying to GitHub Pages
-Live at https://baddestbarghest.github.io/hpsiral_generator/ once Pages is enabled.
+Live at https://baddestbarghest.github.io/hpsiral_generator/ 
 
 1. The site is served under the repo name, so `base` in `vite.config.ts` must match it (`/hpsiral_generator/`).
 2. In **Settings → Pages**, set **Source** to **GitHub Actions**. Pages for private repos requires GitHub Pro or higher.
@@ -49,5 +49,3 @@ ui/                  flowbite-svelte components
 
 ## Roadmap
 Offline render (WebCodecs + mediabunny) → more patterns and post effects → tempo, strobe and flash → audio → text → presets and sequencer → PWA and polish. Background images and videos are on the backlog.
-
-This project is an independent, clean-room implementation, inspired by the idea behind [spiral-app](https://fenrannai.github.io/spiral-app/). It contains none of that project's code.
