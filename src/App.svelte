@@ -274,8 +274,8 @@
 ></canvas>
 
 {#if !uiHidden}
-  <!-- Shifts left of the open drawer (27rem wide) on screens wide enough to show both. -->
-  <div class="fixed top-3 right-3 z-10 flex items-center gap-2 transition-[right] duration-200 {drawerOpen ? 'sm:right-[28rem]' : ''}">
+  <!-- Shifts left of the open drawer (25rem wide) on screens wide enough to show both. -->
+  <div class="fixed top-3 right-3 z-10 flex items-center gap-2 transition-[right] duration-200 {drawerOpen ? 'sm:right-[26rem]' : ''}">
     {#if recorder}
       <span class="flex items-center gap-1.5 rounded bg-red-600/90 px-2 py-1 text-xs font-medium text-white tabular-nums">
         <span class="h-2 w-2 animate-pulse rounded-full bg-white"></span>

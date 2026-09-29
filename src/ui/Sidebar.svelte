@@ -37,7 +37,7 @@
   modal={false}
   outsideclose={false}
   dismissable={false}
-  class="flex w-[27rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden bg-gray-900/95 p-4 pe-2 backdrop-blur"
+  class="flex w-[25rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden bg-gray-900/95 p-4 pe-2 backdrop-blur"
   aria-label="Customization"
 >
   <!-- Header, tab bar and footer stay put; only the tab content scrolls. -->
