@@ -2,7 +2,7 @@
   import type { Snippet } from 'svelte';
   import { Button, CloseButton, Drawer, TabItem, Tabs } from 'flowbite-svelte';
   import { UndoOutline } from 'flowbite-svelte-icons';
-  import { groups, schema, type Param, type Settings } from '../settings/schema';
+  import { groups, isVisible, schema, type Param, type Settings } from '../settings/schema';
   import Control from './Control.svelte';
 
   let {
@@ -54,7 +54,9 @@
                 {p.section}
               </h3>
             {/if}
-            <Control param={p} value={settings[p.key as keyof Settings]} onchange={(v) => set(p.key, v)} />
+            {#if isVisible(p, settings)}
+              <Control param={p} value={settings[p.key as keyof Settings]} onchange={(v) => set(p.key, v)} />
+            {/if}
           {/each}
         </div>
       </TabItem>

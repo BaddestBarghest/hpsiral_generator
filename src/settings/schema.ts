@@ -10,7 +10,11 @@ interface Base<K extends string> {
   /** Optional sub-heading within the group; shown when it differs from the previous param's. */
   section?: string;
   help?: string;
+  /** Show the control only when each listed setting has one of the listed values. */
+  showIf?: Readonly<Record<string, readonly string[]>>;
 }
+
+const SPIRAL_MODES = ['archimedean', 'logarithmic', 'power'] as const;
 
 export interface RangeParam<K extends string = string> extends Base<K> {
   type: 'range';
@@ -62,9 +66,9 @@ export const schema = [
       { value: 'concentric', label: 'Concentric circles' },
     ],
   },
-  { key: 'arms', label: 'Arms', group: 'Spiral', type: 'range', min: 1, max: 16, step: 1, default: 2, help: 'Ignored for concentric circles.' },
+  { key: 'arms', label: 'Arms', group: 'Spiral', type: 'range', min: 1, max: 16, step: 1, default: 2, showIf: { mode: SPIRAL_MODES } },
   { key: 'density', label: 'Density', group: 'Spiral', type: 'range', min: 0.5, max: 30, step: 0.1, default: 10 },
-  { key: 'exponent', label: 'Power-law exponent', group: 'Spiral', type: 'range', min: 0.2, max: 1.5, step: 0.01, default: 0.4, help: 'Power-law spiral only. Lower = tighter centre; 1 = Archimedean.' },
+  { key: 'exponent', label: 'Power-law exponent', group: 'Spiral', type: 'range', min: 0.2, max: 1.5, step: 0.01, default: 0.4, help: 'Lower = tighter centre; 1 = Archimedean.', showIf: { mode: ['power'] } },
   { key: 'centerSpread', label: 'Center spread', group: 'Spiral', type: 'range', min: 0, max: 0.6, step: 0.01, default: 0, help: 'Widens the stripes near the middle so they don’t bunch up.' },
   { key: 'centerTaper', label: 'Center taper', group: 'Spiral', type: 'range', min: 0, max: 1, step: 0.01, default: 0.6, help: 'Thins the arms towards the middle. Higher = pointier core, 0 = constant width.' },
   { key: 'balance', label: 'Arm width', group: 'Spiral', type: 'range', min: 0.05, max: 0.95, step: 0.01, default: 0.5, help: 'Share of each cycle taken by the arm; the rest is the gap.' },
@@ -78,7 +82,7 @@ export const schema = [
       { value: 'outward', label: 'Outward' },
     ],
   },
-  { key: 'mirror', label: 'Mirror (reverse twist)', group: 'Spiral', type: 'toggle', default: false },
+  { key: 'mirror', label: 'Mirror (reverse twist)', group: 'Spiral', type: 'toggle', default: false, showIf: { mode: SPIRAL_MODES } },
 
   // ── Colour ────────────────────────────────────────────────────────────
   // Colours never change the geometry: each cycle is one arm stripe + one gap,
@@ -124,6 +128,13 @@ export function defaults(): Settings {
     out[p.key] = p.type === 'palette' ? [...p.default] : p.default;
   }
   return out as Settings;
+}
+
+/** Whether a control applies to the current settings (see `showIf`). */
+export function isVisible(p: Param, s: Settings): boolean {
+  if (!p.showIf) return true;
+  const values = s as Record<string, unknown>;
+  return Object.entries(p.showIf).every(([key, allowed]) => allowed.includes(String(values[key])));
 }
 
 /** Carries settings saved by older versions forward; run before `sanitize`. */

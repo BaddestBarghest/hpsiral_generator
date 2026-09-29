@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaults, migrate, sanitize, schema, type Param } from './schema';
+import { defaults, isVisible, migrate, sanitize, schema, type Param } from './schema';
 
 describe('schema', () => {
   it('has unique keys', () => {
@@ -49,6 +49,27 @@ describe('schema', () => {
     expect(s.gapColors).toEqual(['#000000']);
     expect(s.arms).toBe(3);
     expect(s).not.toHaveProperty('palette');
+  });
+
+  it('only shows mode-specific controls for the modes they affect', () => {
+    const find = (key: string) => (schema as readonly Param[]).find((p) => p.key === key)!;
+    const s = defaults();
+    expect(isVisible(find('exponent'), { ...s, mode: 'power' })).toBe(true);
+    expect(isVisible(find('exponent'), { ...s, mode: 'archimedean' })).toBe(false);
+    expect(isVisible(find('arms'), { ...s, mode: 'concentric' })).toBe(false);
+    expect(isVisible(find('arms'), { ...s, mode: 'logarithmic' })).toBe(true);
+    expect(isVisible(find('density'), { ...s, mode: 'concentric' })).toBe(true);
+  });
+
+  it('only references real settings and values in showIf', () => {
+    for (const p of schema as readonly Param[]) {
+      for (const [key, allowed] of Object.entries(p.showIf ?? {})) {
+        const target = (schema as readonly Param[]).find((q) => q.key === key);
+        expect(target?.type).toBe('select');
+        const values = target?.type === 'select' ? target.options.map((o) => o.value) : [];
+        for (const v of allowed) expect(values).toContain(v);
+      }
+    }
   });
 
   it('survives non-object input', () => {
