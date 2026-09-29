@@ -104,6 +104,26 @@ export class Renderer {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
+  /**
+   * Copies the frame just drawn into `out` (RGBA, top row first). Must run in the same
+   * task as `draw`, before the browser presents the canvas.
+   */
+  readPixels(out: Uint8Array): void {
+    const gl = this.gl;
+    const { width, height } = this.canvas;
+    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, out);
+    // GL rows run bottom-up; flip in place.
+    const stride = width * 4;
+    const row = new Uint8Array(stride);
+    for (let top = 0, bottom = height - 1; top < bottom; top++, bottom--) {
+      const a = top * stride;
+      const b = bottom * stride;
+      row.set(out.subarray(a, a + stride));
+      out.copyWithin(a, b, b + stride);
+      out.set(row, b);
+    }
+  }
+
   destroy(): void {
     this.canvas.removeEventListener('webglcontextlost', this.onLost as EventListener);
     this.canvas.removeEventListener('webglcontextrestored', this.onRestored as EventListener);

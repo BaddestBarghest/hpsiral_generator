@@ -1,4 +1,4 @@
-// Deterministic frame-by-frame render to a video file with WebCodecs (via mediabunny).
+// Deterministic frame-by-frame render to MP4/WebM with WebCodecs (via mediabunny).
 // Loaded lazily; runs in the render worker (or on the main thread in inline mode).
 import {
   BufferTarget,
@@ -12,18 +12,13 @@ import {
 } from 'mediabunny';
 import { initialTimeline, step } from '../engine/timeline';
 import { Renderer } from '../render/Renderer';
-import { frameCount, type RenderCodec, type RenderJob } from './renderJob';
-
-export class RenderCancelled extends Error {
-  constructor() {
-    super('Render cancelled');
-  }
-}
+import { frameCount, type RenderJob, type VideoCodec } from './renderJob';
+import { RenderCancelled } from './renderErrors';
 
 /** Which codecs this browser can encode at the given size/rate. */
-export async function supportedCodecs(width: number, height: number, fps: number, bitrate: number): Promise<RenderCodec[]> {
+export async function supportedCodecs(width: number, height: number, fps: number, bitrate: number): Promise<VideoCodec[]> {
   if (typeof VideoEncoder === 'undefined') return [];
-  const codecs: RenderCodec[] = ['avc', 'vp9'];
+  const codecs: VideoCodec[] = ['avc', 'vp9'];
   const ok = await Promise.all(
     codecs.map((c) => canEncodeVideo(c, { width, height, bitrate, frameRate: fps }).catch(() => false)),
   );
@@ -40,6 +35,8 @@ export async function renderOffline(
   signal: AbortSignal,
   onProgress: (frame: number, total: number) => void,
 ): Promise<ArrayBuffer | null> {
+  const codec = job.format;
+  if (codec === 'gif') throw new Error('GIF jobs are rendered by renderGif.');
   const canvas = new OffscreenCanvas(job.width, job.height);
   const renderer = new Renderer(canvas);
   renderer.resize(job.width, job.height);
@@ -47,13 +44,13 @@ export async function renderOffline(
   const writable = fileHandle ? await fileHandle.createWritable() : undefined;
   const target: Target = writable ? new StreamTarget(writable, { chunked: true }) : new BufferTarget();
   const format =
-    job.codec === 'avc'
+    codec === 'avc'
       ? // Streaming can seek back to write the index at the end; in-memory puts it up front for fast playback start.
         new Mp4OutputFormat({ fastStart: writable ? false : 'in-memory' })
       : new WebMOutputFormat();
   const output = new Output({ format, target });
   const source = new CanvasSource(canvas, {
-    codec: job.codec,
+    codec,
     bitrate: job.bitrate,
     keyFrameInterval: 2,
     latencyMode: 'quality',

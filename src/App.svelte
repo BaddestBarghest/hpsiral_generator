@@ -100,7 +100,7 @@
 
   async function startRender(req: RenderRequest) {
     if (!host || rendering) return;
-    const format = RENDER_FORMATS[req.codec];
+    const format = RENDER_FORMATS[req.format];
     let fileName = timestampedName('hypno', format.ext);
     // Where supported, stream straight to a file on disk so long 4K renders don't fill memory.
     let fileHandle: FileSystemFileHandle | undefined;
@@ -118,7 +118,7 @@
     }
     const total = Math.max(1, Math.round(req.fps * req.duration));
     rendering = { frame: 0, total, startedAt: performance.now(), fileName, mimeType: format.mimeType, cancelling: false };
-    host.startRender({ ...req, settings: $state.snapshot(settings) }, fileHandle);
+    host.startRender({ ...req, settings: req.settings ?? $state.snapshot(settings) }, fileHandle);
   }
 
   function cancelRender() {
@@ -297,7 +297,7 @@
       <h3 class="mt-8 mb-4 border-b border-gray-700 pb-1 text-xs font-semibold tracking-wider text-primary-500 uppercase">
         Render to file
       </h3>
-      <RenderPanel busy={!!rendering || !!recorder} onrender={startRender} />
+      <RenderPanel busy={!!rendering || !!recorder} {settings} onrender={startRender} />
     {/snippet}
   </Sidebar>
 {/if}

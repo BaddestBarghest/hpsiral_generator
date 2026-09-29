@@ -24,8 +24,11 @@ export class RenderTask {
     this.controller = controller;
     this.loop.setSuspended(true);
     try {
-      const { renderOffline } = await import('../record/offlineRender');
-      const buffer = await renderOffline(job, fileHandle, controller.signal, (frame, total) =>
+      const render =
+        job.format === 'gif'
+          ? (await import('../record/gifRender')).renderGif
+          : (await import('../record/offlineRender')).renderOffline;
+      const buffer = await render(job, fileHandle, controller.signal, (frame, total) =>
         this.emit({ type: 'renderProgress', frame, total }),
       );
       this.emit({ type: 'renderDone', buffer }, buffer ? [buffer] : []);

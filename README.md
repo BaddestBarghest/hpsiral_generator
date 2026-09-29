@@ -12,6 +12,8 @@ A hypnotic spiral generator that runs in the browser. It renders with WebGL2 on 
 - The render loop runs in a Web Worker (`OffscreenCanvas`), so UI work never stalls the animation. Add `?inline` to the URL to render on the main thread instead.
 - Live recording to MP4 or WebM with `MediaRecorder`
 - Offline render to MP4 (H.264) or WebM (VP9), from 720p up to 4K, square or vertical, at 24/30/60 fps. Every frame is rendered at an exact time step, so output is perfectly smooth even if your device can't play it live. Encoding uses WebCodecs + [mediabunny](https://mediabunny.dev). In Chrome/Edge the file streams straight to disk.
+- Animated GIF export (up to 800 px, 20–50 fps, repeats forever). Uses one shared palette, or a palette per frame when colours animate, so there's no colour stepping.
+- Seamless loops for any format. **Exact** mode uses the true repeat length: the LCM of every motion's cycle time, computed with exact fractions. **Short** mode nudges secondary speeds slightly for a short loop. The panel shows both lengths with frame counts and estimated sizes.
 - Settings are saved in `localStorage`
 - Photosensitivity gate. When the system asks for reduced motion, the app starts paused.
 
@@ -45,7 +47,8 @@ Live at https://baddestbarghest.github.io/hpsiral_generator/
 settings/schema.ts   one table defines every parameter; the UI, validation and uniforms come from it
 engine/timeline.ts   deterministic phase integration (live and offline renders produce the same frames)
 render/              WebGL2 Renderer + RenderLoop; runs in render.worker.ts, or inline as a fallback
-record/              live MediaRecorder capture; offline WebCodecs render (lazy-loaded)
+record/              live MediaRecorder capture; offline WebCodecs + GIF render (lazy-loaded)
+engine/loop.ts       seamless-loop planning (exact LCM / short with nudged rates)
 ui/                  flowbite-svelte components
 ```
 
