@@ -6,6 +6,7 @@
     CompressOutline,
     ExpandOutline,
     EyeSlashOutline,
+    FileExportOutline,
     PauseSolid,
     PlaySolid,
     StopSolid,
@@ -20,10 +21,8 @@
   import { frameCount, RENDER_FORMATS, type RenderRequest } from './record/renderJob';
   import Sidebar from './ui/Sidebar.svelte';
   import SafetyGate from './ui/SafetyGate.svelte';
-  import RecordPanel from './ui/RecordPanel.svelte';
-  import RenderPanel from './ui/RenderPanel.svelte';
+  import ExportPanel from './ui/ExportPanel.svelte';
   import RenderProgress from './ui/RenderProgress.svelte';
-  import SectionHeading from './ui/SectionHeading.svelte';
 
   const SAFETY_KEY = 'hypnogen:safety-ack:v1';
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -36,10 +35,13 @@
   let userPlaying = $state(!reducedMotion);
   const playing = $derived(safetyAck && userPlaying);
 
+  // Customization and Export share the right edge; opening one closes the other.
   let drawerOpen = $state(false);
+  let exportOpen = $state(false);
   let drawerWidth = $state(400);
   let toolbarWidth = $state(0);
   let windowWidth = $state(innerWidth);
+  const panelOpen = $derived(drawerOpen || exportOpen);
   // Beside the open panel, but never pushed off the left edge by a very wide one.
   const toolbarOffset = $derived(Math.max(12, Math.min(drawerWidth + 16, windowWidth - toolbarWidth - 12)));
   let uiHidden = $state(false);
@@ -246,10 +248,21 @@
     }
   }
 
+  function togglePanel(which: 'customize' | 'export') {
+    uiHidden = false; // panels live with the other controls
+    if (which === 'customize') {
+      drawerOpen = !drawerOpen;
+      if (drawerOpen) exportOpen = false;
+    } else {
+      exportOpen = !exportOpen;
+      if (exportOpen) drawerOpen = false;
+    }
+  }
+
   function onKeydown(e: KeyboardEvent) {
     if (!safetyAck || rendering || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (e.key === 'Escape' && drawerOpen) {
-      drawerOpen = false;
+    if (e.key === 'Escape' && panelOpen) {
+      drawerOpen = exportOpen = false;
       return;
     }
     const t = e.target as HTMLElement | null;
@@ -267,11 +280,10 @@
         uiHidden = !uiHidden;
         break;
       case 'c':
-        // The panel lives with the other controls, so bring those back if they're hidden.
-        if (uiHidden) {
-          uiHidden = false;
-          drawerOpen = true;
-        } else drawerOpen = !drawerOpen;
+        togglePanel('customize');
+        break;
+      case 'e':
+        togglePanel('export');
         break;
       case 'r':
         toggleRecording();
@@ -296,7 +308,7 @@
 {#if !uiHidden}
   <!-- Shifts left of the open drawer (user-resizable) on screens wide enough to show both. -->
   <div
-    class="fixed top-3 right-3 z-10 flex items-center gap-2 {drawerOpen ? 'sm:right-[var(--drawer-offset)]' : ''}"
+    class="fixed top-3 right-3 z-10 flex items-center gap-2 {panelOpen ? 'sm:right-[var(--drawer-offset)]' : ''}"
     style="--drawer-offset: {toolbarOffset}px"
     bind:clientWidth={toolbarWidth}
   >
@@ -321,25 +333,27 @@
     <Button size="sm" color="dark" class="p-2" onclick={() => (uiHidden = true)} aria-label="Hide controls (H)" title="Hide controls (H). Click the spiral to show them again.">
       <EyeSlashOutline class="h-5 w-5" />
     </Button>
-    <Button size="sm" color="dark" class="p-2" onclick={() => (drawerOpen = !drawerOpen)} aria-label="Customization (C)" title="Customization (C)">
+    <Button size="sm" color={exportOpen ? 'alternative' : 'dark'} class="p-2" onclick={() => togglePanel('export')} aria-label="Export video (E)" title="Export video or GIF (E)">
+      <FileExportOutline class="h-5 w-5" />
+    </Button>
+    <Button size="sm" color={drawerOpen ? 'alternative' : 'dark'} class="p-2" onclick={() => togglePanel('customize')} aria-label="Customization (C)" title="Customization (C)">
       <AdjustmentsHorizontalOutline class="h-5 w-5" />
     </Button>
   </div>
 
-  <Sidebar bind:open={drawerOpen} bind:width={drawerWidth} {settings} onreset={resetSettings}>
-    {#snippet output()}
-      <SectionHeading class="mt-8 mb-4">Live recording</SectionHeading>
-      <RecordPanel
-        bind:prefs={recordPrefs}
-        {formats}
-        recording={!!recorder}
-        elapsed={recordElapsed}
-        ontoggle={toggleRecording}
-      />
-      <SectionHeading class="mt-8 mb-4">Render to file</SectionHeading>
-      <RenderPanel busy={!!rendering || !!recorder || choosingFile} {settings} onrender={startRender} />
-    {/snippet}
-  </Sidebar>
+  <Sidebar bind:open={drawerOpen} bind:width={drawerWidth} {settings} onreset={resetSettings} />
+  <ExportPanel
+    bind:open={exportOpen}
+    bind:width={drawerWidth}
+    {settings}
+    renderBusy={!!rendering || !!recorder || choosingFile}
+    onrender={startRender}
+    bind:recordPrefs
+    {formats}
+    recording={!!recorder}
+    elapsed={recordElapsed}
+    ontogglerecording={toggleRecording}
+  />
 {/if}
 
 <!-- Stacked, so a "saved" notice doesn't cover an earlier warning. -->

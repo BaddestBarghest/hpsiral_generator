@@ -3,7 +3,7 @@
 
 import { BOLD_FONT_IDS, FONTS } from './fonts';
 
-export type Group = 'Spiral' | 'Colour' | 'Aux. spiral' | 'Rhythm' | 'Text' | 'Output';
+export type Group = 'Spiral' | 'Colour' | 'Aux. spiral' | 'Rhythm' | 'Text' | 'Display';
 
 interface Base<K extends string> {
   key: K;
@@ -103,42 +103,42 @@ const COLOR_MODES = [
 
 export const schema = [
   // ── Spiral ────────────────────────────────────────────────────────────
-  { key: 'mode', label: 'Pattern', group: 'Spiral', type: 'select', default: 'power', options: PATTERNS },
+  { key: 'mode', label: 'Pattern', group: 'Spiral', section: 'Shape', type: 'select', default: 'power', options: PATTERNS },
   {
-    key: 'shape', label: 'Shape', group: 'Spiral', type: 'select', default: 'round', help: 'Applies to both spirals.',
+    key: 'shape', label: 'Shape', group: 'Spiral', section: 'Shape', type: 'select', default: 'round', help: 'Applies to both spirals.',
     options: [
       { value: 'round', label: 'Round' },
       { value: 'polygon', label: 'Polygon' },
     ],
   },
-  { key: 'sides', label: 'Sides', group: 'Spiral', type: 'range', min: 3, max: 12, step: 1, default: 6, showIf: { shape: ['polygon'] } },
-  { key: 'arms', label: 'Arms', group: 'Spiral', type: 'range', min: 1, max: 16, step: 1, default: 2, showIf: { mode: SPIRAL_MODES } },
-  { key: 'density', label: 'Density', group: 'Spiral', type: 'range', min: 0.5, max: 30, step: 0.1, default: 10, curve: 'log' },
-  { key: 'exponent', label: 'Power-law exponent', group: 'Spiral', type: 'range', min: 0.2, max: 1.5, step: 0.01, default: 0.4, help: 'Lower = tighter centre; 1 = Archimedean.', showIf: { mode: ['power'] } },
-  { key: 'centerSpread', label: 'Center spread', group: 'Spiral', type: 'range', min: 0, max: 0.6, step: 0.01, default: 0, help: 'Widens the stripes near the middle so they don’t bunch up.' },
-  { key: 'centerTaper', label: 'Center taper', group: 'Spiral', type: 'range', min: 0, max: 1, step: 0.01, default: 0.6, help: 'Thins the arms towards the middle. Higher = pointier core, 0 = constant width.' },
-  { key: 'balance', label: 'Arm width', group: 'Spiral', type: 'range', min: 0.05, max: 0.95, step: 0.01, default: 0.5, help: 'Share of each cycle taken by the arm; the rest is the gap.' },
-  { key: 'softness', label: 'Edge softness', group: 'Spiral', type: 'range', min: 0, max: 1, step: 0.01, default: 0 },
-  { key: 'zoom', label: 'Zoom', group: 'Spiral', type: 'range', min: 0.25, max: 4, step: 0.01, default: 1, curve: 'log' },
-  { key: 'speed', label: 'Speed', group: 'Spiral', type: 'range', min: 0, max: 4, step: 0.01, default: 0.5, unit: 'cycles/s', curve: 'sq' },
-  { key: 'direction', label: 'Direction', group: 'Spiral', type: 'select', default: 'inward', options: DIRECTIONS },
-  { key: 'mirror', label: 'Mirror (reverse twist)', group: 'Spiral', type: 'toggle', default: false, showIf: { mode: SPIRAL_MODES } },
+  { key: 'sides', label: 'Sides', group: 'Spiral', section: 'Shape', type: 'range', min: 3, max: 12, step: 1, default: 6, showIf: { shape: ['polygon'] } },
+  { key: 'arms', label: 'Arms', group: 'Spiral', section: 'Shape', type: 'range', min: 1, max: 16, step: 1, default: 2, showIf: { mode: SPIRAL_MODES } },
+  { key: 'density', label: 'Density', group: 'Spiral', section: 'Shape', type: 'range', min: 0.5, max: 30, step: 0.1, default: 10, curve: 'log' },
+  { key: 'exponent', label: 'Power-law exponent', group: 'Spiral', section: 'Shape', type: 'range', min: 0.2, max: 1.5, step: 0.01, default: 0.4, help: 'Lower = tighter centre; 1 = Archimedean.', showIf: { mode: ['power'] } },
+  { key: 'centerSpread', label: 'Center spread', group: 'Spiral', section: 'Shape', type: 'range', min: 0, max: 0.6, step: 0.01, default: 0, help: 'Widens the stripes near the middle so they don’t bunch up.' },
+  { key: 'centerTaper', label: 'Center taper', group: 'Spiral', section: 'Shape', type: 'range', min: 0, max: 1, step: 0.01, default: 0.6, help: 'Thins the arms towards the middle. Higher = pointier core, 0 = constant width.' },
+  { key: 'balance', label: 'Arm width', group: 'Spiral', section: 'Shape', type: 'range', min: 0.05, max: 0.95, step: 0.01, default: 0.5, help: 'Share of each cycle taken by the arm; the rest is the gap.' },
+  { key: 'softness', label: 'Edge softness', group: 'Spiral', section: 'Shape', type: 'range', min: 0, max: 1, step: 0.01, default: 0 },
+  { key: 'zoom', label: 'Zoom', group: 'Spiral', section: 'Shape', type: 'range', min: 0.25, max: 4, step: 0.01, default: 1, curve: 'log' },
+  { key: 'mirror', label: 'Mirror (clockwise ↔ anticlockwise)', group: 'Spiral', section: 'Shape', type: 'toggle', default: false, showIf: { mode: SPIRAL_MODES } },
+  { key: 'speed', label: 'Speed', group: 'Spiral', section: 'Motion', type: 'range', min: 0, max: 4, step: 0.01, default: 0.5, unit: 'cycles/s', curve: 'sq' },
+  { key: 'direction', label: 'Direction', group: 'Spiral', section: 'Motion', type: 'select', default: 'inward', options: DIRECTIONS },
   { key: 'twist', label: 'Twist', group: 'Spiral', section: 'Motion', type: 'range', min: -3, max: 3, step: 0.01, default: 0, unit: 'turns', help: 'Bends the arms more the further out they are.', showIf: { mode: ['logarithmic', 'power'] } },
   { key: 'wobble', label: 'Wobble', group: 'Spiral', section: 'Motion', type: 'range', min: 0, max: 1, step: 0.01, default: 0, help: 'Ripples the arms sideways.' },
-  { key: 'wobbleFreq', label: 'Wobble ripples', group: 'Spiral', section: 'Motion', type: 'range', min: 0.5, max: 12, step: 0.1, default: 3 },
-  { key: 'wobbleSpeed', label: 'Wobble speed', group: 'Spiral', section: 'Motion', type: 'range', min: 0, max: 3, step: 0.01, default: 0.5, unit: 'cycles/s' },
+  { key: 'wobbleFreq', label: 'Wobble ripples', group: 'Spiral', section: 'Motion', type: 'range', min: 0.5, max: 12, step: 0.1, default: 3, curve: 'log' },
+  { key: 'wobbleSpeed', label: 'Wobble speed', group: 'Spiral', section: 'Motion', type: 'range', min: 0, max: 3, step: 0.01, default: 0.5, unit: 'cycles/s', curve: 'sq' },
+  { key: 'trails', label: 'Afterimage trails', group: 'Spiral', section: 'Afterimage', type: 'range', min: 0, max: 2, step: 0.01, default: 0, unit: 's', curve: 'sq', help: 'Leaves fading echoes of the spirals; the time is how long an echo takes to fade by half. Text has its own in the Text tab.' },
 
   // ── Colour ────────────────────────────────────────────────────────────
   // Colours never change the geometry: each cycle is one arm stripe + one gap,
   // and each band paints itself from its own colour list.
   { key: 'armColors', label: 'Colours', group: 'Colour', section: 'Arms', type: 'palette', minColors: 1, maxColors: MAX_BAND_COLORS, default: ['#ffffff'] },
   { key: 'armColorMode', label: 'Colour mode', group: 'Colour', section: 'Arms', type: 'select', default: 'static', options: COLOR_MODES, help: 'Only matters with 2 or more colours.' },
-  { key: 'armShift', label: 'Colour shift speed', group: 'Colour', section: 'Arms', type: 'range', min: 0, max: 1, step: 0.01, default: 0, unit: 'cycles/s' },
+  { key: 'armShift', label: 'Colour shift speed', group: 'Colour', section: 'Arms', type: 'range', min: 0, max: 1, step: 0.01, default: 0, unit: 'cycles/s', curve: 'sq' },
   { key: 'gapColors', label: 'Colours', group: 'Colour', section: 'Gaps', type: 'palette', minColors: 1, maxColors: MAX_BAND_COLORS, default: ['#000000'] },
   { key: 'gapColorMode', label: 'Colour mode', group: 'Colour', section: 'Gaps', type: 'select', default: 'static', options: COLOR_MODES },
-  { key: 'gapShift', label: 'Colour shift speed', group: 'Colour', section: 'Gaps', type: 'range', min: 0, max: 1, step: 0.01, default: 0, unit: 'cycles/s' },
-  { key: 'hueRoll', label: 'Hue roll speed', group: 'Colour', section: 'Hue', type: 'range', min: 0, max: 0.25, step: 0.005, default: 0, unit: 'rev/s', help: 'Rotates the hue of every colour.' },
-  { key: 'trails', label: 'Afterimage trails', group: 'Colour', section: 'Afterimage', type: 'range', min: 0, max: 2, step: 0.01, default: 0, unit: 's', curve: 'sq', help: 'Leaves fading echoes of the spirals; the time is how long an echo takes to fade by half. Text has its own in the Text tab.' },
+  { key: 'gapShift', label: 'Colour shift speed', group: 'Colour', section: 'Gaps', type: 'range', min: 0, max: 1, step: 0.01, default: 0, unit: 'cycles/s', curve: 'sq' },
+  { key: 'hueRoll', label: 'Hue roll speed', group: 'Colour', section: 'Hue', type: 'range', min: 0, max: 0.25, step: 0.001, default: 0, unit: 'rev/s', curve: 'sq', help: 'Rotates the hue of every colour.' },
   { key: 'vignette', label: 'Strength', group: 'Colour', section: 'Vignette', type: 'range', min: 0, max: 1, step: 0.01, default: 0 },
   { key: 'vignetteSize', label: 'Size', group: 'Colour', section: 'Vignette', type: 'range', min: 0.2, max: 1.6, step: 0.01, default: 0.9 },
   { key: 'vignetteColor', label: 'Colour', group: 'Colour', section: 'Vignette', type: 'color', default: '#000000' },
@@ -153,10 +153,10 @@ export const schema = [
   { key: 's2Width', label: 'Arm width', group: 'Aux. spiral', type: 'range', min: 0.05, max: 0.95, step: 0.01, default: 0.2, showIf: { s2Enabled: ['true'] } },
   { key: 's2Speed', label: 'Speed', group: 'Aux. spiral', type: 'range', min: 0, max: 4, step: 0.01, default: 0.3, unit: 'cycles/s', curve: 'sq', showIf: { s2Enabled: ['true'] } },
   { key: 's2Direction', label: 'Direction', group: 'Aux. spiral', type: 'select', default: 'outward', options: DIRECTIONS, showIf: { s2Enabled: ['true'] } },
-  { key: 's2Mirror', label: 'Mirror (reverse twist)', group: 'Aux. spiral', type: 'toggle', default: true, showIf: { s2Enabled: ['true'], s2Mode: SPIRAL_MODES } },
+  { key: 's2Mirror', label: 'Mirror (clockwise ↔ anticlockwise)', group: 'Aux. spiral', type: 'toggle', default: true, showIf: { s2Enabled: ['true'], s2Mode: SPIRAL_MODES } },
   { key: 's2Colors', label: 'Colours', group: 'Aux. spiral', section: 'Colour & blending', type: 'palette', minColors: 1, maxColors: MAX_BAND_COLORS, default: ['#f5cb5c'], showIf: { s2Enabled: ['true'] } },
   { key: 's2ColorMode', label: 'Colour mode', group: 'Aux. spiral', section: 'Colour & blending', type: 'select', default: 'static', options: COLOR_MODES, showIf: { s2Enabled: ['true'] } },
-  { key: 's2Shift', label: 'Colour shift speed', group: 'Aux. spiral', section: 'Colour & blending', type: 'range', min: 0, max: 1, step: 0.01, default: 0, unit: 'cycles/s', showIf: { s2Enabled: ['true'] } },
+  { key: 's2Shift', label: 'Colour shift speed', group: 'Aux. spiral', section: 'Colour & blending', type: 'range', min: 0, max: 1, step: 0.01, default: 0, unit: 'cycles/s', curve: 'sq', showIf: { s2Enabled: ['true'] } },
   { key: 's2Opacity', label: 'Opacity', group: 'Aux. spiral', section: 'Colour & blending', type: 'range', min: 0, max: 1, step: 0.01, default: 0.8, showIf: { s2Enabled: ['true'] } },
   {
     key: 's2Blend', label: 'Blend mode', group: 'Aux. spiral', section: 'Colour & blending', type: 'select', default: 'normal', showIf: { s2Enabled: ['true'] },
@@ -175,7 +175,7 @@ export const schema = [
   { key: 'rampEnabled', label: 'Vary speed with the beat', group: 'Rhythm', section: 'Speed ramp', type: 'toggle', default: false, help: 'Speeds both spirals up and down over a cycle of beats.' },
   { key: 'rampMin', label: 'Slowest', group: 'Rhythm', section: 'Speed ramp', type: 'range', min: 0, max: 1, step: 0.05, default: 0.4, unit: '× speed', showIf: { rampEnabled: ['true'] } },
   { key: 'rampMax', label: 'Fastest', group: 'Rhythm', section: 'Speed ramp', type: 'range', min: 1, max: 4, step: 0.05, default: 1.6, unit: '× speed', showIf: { rampEnabled: ['true'] } },
-  { key: 'rampBeats', label: 'Cycle length', group: 'Rhythm', section: 'Speed ramp', type: 'range', min: 2, max: 64, step: 1, default: 16, unit: 'beats', showIf: { rampEnabled: ['true'] } },
+  { key: 'rampBeats', label: 'Cycle length', group: 'Rhythm', section: 'Speed ramp', type: 'range', min: 2, max: 64, step: 1, default: 16, unit: 'beats', curve: 'log', showIf: { rampEnabled: ['true'] } },
   {
     key: 'rampShape', label: 'Curve', group: 'Rhythm', section: 'Speed ramp', type: 'select', default: 'smooth', showIf: { rampEnabled: ['true'] },
     options: [
@@ -197,7 +197,7 @@ export const schema = [
   { key: 'flashColor', label: 'Colour', group: 'Rhythm', section: 'Flash', type: 'color', default: '#ffffff', showIf: { flashMode: ['soft', 'strobe'] } },
   { key: 'invertEnabled', label: 'Invert colours on the beat', group: 'Rhythm', section: 'Inversion', type: 'toggle', default: false },
   { key: 'invertRate', label: 'Rate', group: 'Rhythm', section: 'Inversion', type: 'select', default: '4', options: PULSE_RATES, showIf: { invertEnabled: ['true'] } },
-  { key: 'invertLength', label: 'Length', group: 'Rhythm', section: 'Inversion', type: 'range', min: 0.05, max: 0.5, step: 0.01, default: 0.15, showIf: { invertEnabled: ['true'] } },
+  { key: 'invertLength', label: 'Length', group: 'Rhythm', section: 'Inversion', type: 'range', min: 0.05, max: 0.5, step: 0.01, default: 0.15, help: 'Share of each inversion period.', showIf: { invertEnabled: ['true'] } },
   { key: 'zoomPulse', label: 'Amount', group: 'Rhythm', section: 'Zoom pulse', type: 'range', min: 0, max: 0.5, step: 0.01, default: 0, help: 'Gently "breathes" the zoom in time.' },
   { key: 'zoomPulseRate', label: 'Rate', group: 'Rhythm', section: 'Zoom pulse', type: 'select', default: '2', options: PULSE_RATES },
   { key: 'flashUnlock', label: 'Allow more than 3 flashes per second', group: 'Rhythm', section: 'Safety', type: 'toggle', default: false, help: '⚠ Rapid flashing can trigger seizures. While off, beat flashes, inversions and text flashes together stay at or below 3 per second: beat effects skip beats, and the text flash is dropped if it still doesn’t fit.' },
@@ -248,7 +248,7 @@ export const schema = [
   { key: 'textFont', label: 'Font', group: 'Text', section: 'Style', type: 'select', picker: 'font', default: 'sans', options: FONT_OPTIONS, showIf: { textEnabled: ['true'] } },
   { key: 'textBold', label: 'Bold', group: 'Text', section: 'Style', type: 'toggle', default: true, showIf: { textEnabled: ['true'], textFont: BOLD_FONT_IDS } },
   { key: 'textUppercase', label: 'Uppercase', group: 'Text', section: 'Style', type: 'toggle', default: false, showIf: { textEnabled: ['true'] } },
-  { key: 'textSize', label: 'Size', group: 'Text', section: 'Style', type: 'range', min: 0.03, max: 0.4, step: 0.005, default: 0.12, showIf: { textEnabled: ['true'] } },
+  { key: 'textSize', label: 'Size', group: 'Text', section: 'Style', type: 'range', min: 0.03, max: 0.4, step: 0.005, default: 0.12, curve: 'log', showIf: { textEnabled: ['true'] } },
   { key: 'textX', label: 'Horizontal position', group: 'Text', section: 'Style', type: 'range', min: -0.8, max: 0.8, step: 0.01, default: 0, help: 'Negative moves it left, positive right.', showIf: { textEnabled: ['true'] } },
   { key: 'textY', label: 'Vertical position', group: 'Text', section: 'Style', type: 'range', min: -0.8, max: 0.8, step: 0.01, default: 0, help: 'Negative moves it down, positive up.', showIf: { textEnabled: ['true'] } },
   { key: 'textColor', label: 'Colour', group: 'Text', section: 'Style', type: 'color', default: '#ffffff', showIf: { textEnabled: ['true'] } },
@@ -262,10 +262,10 @@ export const schema = [
   { key: 'textFlashIntensity', label: 'Intensity', group: 'Text', section: 'Flash', type: 'range', min: 0, max: 1, step: 0.01, default: 0.7, showIf: { textEnabled: ['true'], textFlash: ['true'] } },
 
   // ── Display ───────────────────────────────────────────────────────────
-  { key: 'renderScale', label: 'Render scale', group: 'Output', section: 'Display', type: 'range', min: 0.25, max: 1, step: 0.05, default: 1 },
-  { key: 'maxDpr', label: 'Max pixel ratio', group: 'Output', section: 'Display', type: 'range', min: 1, max: 3, step: 0.25, default: 2 },
+  { key: 'renderScale', label: 'Render scale', group: 'Display', section: 'Live preview', type: 'range', min: 0.25, max: 1, step: 0.05, default: 1, help: 'Draws the preview at fewer pixels to run faster on slow devices. Exports always render at full quality.' },
+  { key: 'maxDpr', label: 'Max pixel ratio', group: 'Display', section: 'Live preview', type: 'range', min: 1, max: 3, step: 0.25, default: 2 },
   {
-    key: 'maxFps', label: 'Max FPS', group: 'Output', section: 'Display', type: 'select', default: '0',
+    key: 'maxFps', label: 'Max FPS', group: 'Display', section: 'Live preview', type: 'select', default: '0',
     options: [
       { value: '0', label: 'Display refresh rate' },
       { value: '60', label: '60' },
@@ -288,7 +288,7 @@ type ValueOf<P> = P extends { type: 'range' } ? number
 export type Settings = { -readonly [P in Entry as P['key']]: ValueOf<P> };
 export type SettingKey = keyof Settings;
 
-export const groups: Group[] = ['Spiral', 'Colour', 'Aux. spiral', 'Rhythm', 'Text', 'Output'];
+export const groups: Group[] = ['Spiral', 'Colour', 'Aux. spiral', 'Rhythm', 'Text', 'Display'];
 
 export function defaults(): Settings {
   const out: Record<string, unknown> = {};

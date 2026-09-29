@@ -64,7 +64,9 @@
   const frames = $derived(Math.max(1, Math.round(finalDuration * fps)));
   const maxSeconds = $derived(isGif ? MAX_GIF_SECONDS : MAX_SECONDS);
   const tooLong = $derived(finalDuration > maxSeconds + 1e-6);
-  const formats = $derived<RenderFormat[]>([...(videoCodecs ?? []), 'gif']);
+  // While the browser is still being probed, list the usual video formats rather than a blank
+  // box; rendering stays disabled until the probe confirms the chosen one.
+  const formats = $derived<RenderFormat[]>([...(videoCodecs ?? (['avc', 'vp9'] as const)), 'gif']);
   const canRender = $derived(
     !busy && validDuration && !tooLong && (isGif || !!videoCodecs?.includes(format as VideoCodec)),
   );
