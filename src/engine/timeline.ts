@@ -52,6 +52,14 @@ export function initialTimeline(): TimelineState {
 
 const wrap = (x: number, period: number) => x - Math.floor(x / period) * period;
 
+/**
+ * Advances a colour phase; at speed 0 it returns to 0, so switching hue roll or a colour
+ * shift off restores the exact chosen colours instead of freezing a rotated or half-blended
+ * state (which could, for example, leave pink showing as its opposite, green).
+ */
+const colourPhase = (phase: number, speed: number, dt: number, period: number) =>
+  speed === 0 ? 0 : wrap(phase + speed * dt, period);
+
 export function step(state: TimelineState, s: Settings, dt: number): TimelineState {
   const dir = s.direction === 'inward' ? 1 : -1;
   const dir2 = s.s2Direction === 'inward' ? 1 : -1;
@@ -62,10 +70,10 @@ export function step(state: TimelineState, s: Settings, dt: number): TimelineSta
     time: state.time + dt,
     flowPhase: wrap(state.flowPhase + s.speed * dir * flowTime, FLOW_PERIOD),
     flowPhase2: wrap(state.flowPhase2 + s.s2Speed * dir2 * flowTime, FLOW_PERIOD),
-    huePhase: wrap(state.huePhase + s.hueRoll * dt, 1),
-    armColorPhase: wrap(state.armColorPhase + s.armShift * dt, COLOR_PERIOD),
-    gapColorPhase: wrap(state.gapColorPhase + s.gapShift * dt, COLOR_PERIOD),
-    s2ColorPhase: wrap(state.s2ColorPhase + s.s2Shift * dt, COLOR_PERIOD),
+    huePhase: colourPhase(state.huePhase, s.hueRoll, dt, 1),
+    armColorPhase: colourPhase(state.armColorPhase, s.armShift, dt, COLOR_PERIOD),
+    gapColorPhase: colourPhase(state.gapColorPhase, s.gapShift, dt, COLOR_PERIOD),
+    s2ColorPhase: colourPhase(state.s2ColorPhase, s.s2Shift, dt, COLOR_PERIOD),
     wobblePhase: wrap(state.wobblePhase + s.wobbleSpeed * dt, 1),
     beatPhase,
   };

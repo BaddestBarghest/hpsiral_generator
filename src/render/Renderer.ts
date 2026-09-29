@@ -222,7 +222,13 @@ export class Renderer {
     gl.uniform3fv(loc('uColors'), this.colorBuf);
     gl.uniform1iv(loc('uCount'), bands.map((b) => b.length));
     gl.uniform1iv(loc('uColorMode'), [s.armColorMode, s.gapColorMode, s.s2ColorMode].map((m) => COLOR_MODES[m]));
-    gl.uniform1fv(loc('uShift'), [tl.armColorPhase, tl.gapColorPhase, tl.s2ColorPhase]);
+    // A speed of 0 means your exact colours, even while paused (the timeline only resets
+    // these phases when it advances).
+    gl.uniform1fv(loc('uShift'), [
+      s.armShift === 0 ? 0 : tl.armColorPhase,
+      s.gapShift === 0 ? 0 : tl.gapColorPhase,
+      s.s2Shift === 0 ? 0 : tl.s2ColorPhase,
+    ]);
     gl.uniform3fv(loc('uAvg1'), avg1);
     gl.uniform3fv(loc('uAvg2'), s2Avg);
 
@@ -231,7 +237,7 @@ export class Renderer {
     gl.uniform1i(loc('uS2Blend'), BLENDS[s.s2Blend]);
 
 
-    gl.uniform1f(loc('uHueShift'), tl.huePhase * Math.PI * 2);
+    gl.uniform1f(loc('uHueShift'), s.hueRoll === 0 ? 0 : tl.huePhase * Math.PI * 2);
     gl.uniform1f(loc('uFlash'), pulse.flash);
     gl.uniform3fv(loc('uFlashColor'), hexToRgb(s.flashColor));
     gl.uniform1f(loc('uInvert'), pulse.invert);

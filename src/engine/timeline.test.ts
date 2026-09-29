@@ -73,3 +73,14 @@ describe('LiveClock', () => {
     expect(results.filter((r) => r !== null)).toHaveLength(2);
   });
 });
+
+describe('colour phases', () => {
+  it('return to the exact colours when their speed is set back to 0', () => {
+    const rolling = { ...defaults(), hueRoll: 0.5, armShift: 0.3, gapShift: 0.7, s2Shift: 0.2 };
+    let tl = initialTimeline();
+    for (let i = 0; i < 60; i++) tl = step(tl, rolling, 1 / 60); // one second: hue is half-way round
+    expect(tl.huePhase).toBeCloseTo(0.5);
+    tl = step(tl, { ...rolling, hueRoll: 0, armShift: 0, gapShift: 0, s2Shift: 0 }, 1 / 60);
+    expect([tl.huePhase, tl.armColorPhase, tl.gapColorPhase, tl.s2ColorPhase]).toEqual([0, 0, 0, 0]);
+  });
+});
