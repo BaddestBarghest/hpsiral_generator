@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "gifenc": "^1.0.3",
-    "mediabunny": "^1.60.0"
+    "mediabunny": "^1.60.0",
+    "vanilla-colorful": "^0.7.2"
   }
 }
