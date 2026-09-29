@@ -2,7 +2,8 @@
   import { Button, Helper, Label, Range, Select, Textarea, Toggle } from 'flowbite-svelte';
   import { CloseOutline, PlusOutline, UndoOutline } from 'flowbite-svelte-icons';
   import { fromSlider, SLIDER_RESOLUTION, toSlider, type Param } from '../settings/schema';
-  import ColorEditor from './color/ColorEditor.svelte';
+  // The colour picker (and its library) loads the first time a colour is edited.
+  const colorEditor = () => import('./color/ColorEditor.svelte');
   import FontPicker from './FontPicker.svelte';
   import type { TextFontId } from '../settings/fonts';
 
@@ -170,7 +171,9 @@
       </button>
     </div>
     {#if editing === 0}
-      <ColorEditor value={value as string} onchange={(c) => onchange(c)} onclose={() => (editing = null)} />
+      {#await colorEditor() then { default: ColorEditor }}
+        <ColorEditor value={value as string} onchange={(c) => onchange(c)} onclose={() => (editing = null)} />
+      {/await}
     {/if}
   {:else if param.type === 'palette'}
     {@const colors = value as string[]}
@@ -205,7 +208,9 @@
       {/if}
     </div>
     {#if editing !== null && editing < colors.length}
-      <ColorEditor value={colors[editing]} onchange={(c) => setColor(editing!, c)} onclose={() => (editing = null)} />
+      {#await colorEditor() then { default: ColorEditor }}
+        <ColorEditor value={colors[editing]} onchange={(c) => setColor(editing!, c)} onclose={() => (editing = null)} />
+      {/await}
     {/if}
   {/if}
   {#if hint}

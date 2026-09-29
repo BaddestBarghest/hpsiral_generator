@@ -1,7 +1,5 @@
 import type { Settings } from '../settings/schema';
 import type { RenderJob } from '../record/renderJob';
-import { RenderLoop } from './loop';
-import { RenderTask } from './renderTask';
 import type { FromRender, ToRender, Viewport } from './protocol';
 
 /** Main-thread handle to the render loop, whether it runs in a worker or inline. */
@@ -33,7 +31,11 @@ function workerSupported(canvas: HTMLCanvasElement): boolean {
   return !new URLSearchParams(location.search).has('inline');
 }
 
-export function createRenderHost(canvas: HTMLCanvasElement, init: HostInit): RenderHost {
+/**
+ * Starts rendering. Normally in a worker; only browsers that can't render off the main
+ * thread download the renderer into the page (it's a separate chunk, loaded on demand).
+ */
+export async function createRenderHost(canvas: HTMLCanvasElement, init: HostInit): Promise<RenderHost> {
   if (workerSupported(canvas)) {
     const worker = new Worker(new URL('./render.worker.ts', import.meta.url), { type: 'module' });
     const post = (msg: ToRender, transfer: Transferable[] = []) => worker.postMessage(msg, transfer);
@@ -56,6 +58,7 @@ export function createRenderHost(canvas: HTMLCanvasElement, init: HostInit): Ren
     };
   }
 
+  const [{ RenderLoop }, { RenderTask }] = await Promise.all([import('./loop'), import('./renderTask')]);
   const loop = new RenderLoop(canvas, init.settings, init.viewport, init.playing, init.onEvent);
   const task = new RenderTask(loop, init.onEvent);
   queueMicrotask(() => init.onEvent({ type: 'ready' }));

@@ -22,7 +22,6 @@
   import { frameCount, RENDER_FORMATS, type RenderRequest } from './record/renderJob';
   import Sidebar from './ui/Sidebar.svelte';
   import SafetyGate from './ui/SafetyGate.svelte';
-  import ExportPanel from './ui/ExportPanel.svelte';
   import RenderProgress from './ui/RenderProgress.svelte';
 
   const SAFETY_KEY = 'hypnogen:safety-ack:v1';
@@ -30,7 +29,8 @@
 
 
   let canvas: HTMLCanvasElement;
-  let host: RenderHost | null = null;
+  // Reactive, so effects re-send settings once the host is ready (it starts asynchronously).
+  let host = $state.raw<RenderHost | null>(null);
 
   let safetyAck = $state(readStored(SAFETY_KEY) === '1');
   let userPlaying = $state(!reducedMotion);
@@ -43,6 +43,11 @@
   let toolbarWidth = $state(0);
   let windowWidth = $state(innerWidth);
   const panelOpen = $derived(drawerOpen || exportOpen);
+  /** Set once Export is first opened; its code is only fetched then. */
+  let exportUsed = $state(false);
+  $effect(() => {
+    if (exportOpen) exportUsed = true;
+  });
   // Beside the open panel, but never pushed off the left edge by a very wide one.
   const toolbarOffset = $derived(Math.max(12, Math.min(drawerWidth + 16, windowWidth - toolbarWidth - 12)));
   let uiHidden = $state(false);
@@ -171,19 +176,20 @@
   }
 
   onMount(() => {
-    try {
-      host = createRenderHost(canvas, {
-        settings: $state.snapshot(settings),
-        viewport: viewport(),
-        playing,
-        onEvent: onRenderEvent,
-      });
-      renderMode = host.mode;
-      void initCustomFont((data) => host?.setCustomFont(data));
-    } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
-      return;
-    }
+    let disposed = false;
+    createRenderHost(canvas, {
+      settings: $state.snapshot(settings),
+      viewport: viewport(),
+      playing,
+      onEvent: onRenderEvent,
+    })
+      .then((h) => {
+        if (disposed) return h.destroy();
+        host = h;
+        renderMode = h.mode;
+        void initCustomFont((data) => host?.setCustomFont(data));
+      })
+      .catch((e) => (error = e instanceof Error ? e.message : String(e)));
     const onResize = () => host?.setViewport(viewport());
     const ro = new ResizeObserver(onResize);
     ro.observe(canvas);
@@ -192,6 +198,7 @@
     const onFs = () => (isFullscreen = !!document.fullscreenElement);
     document.addEventListener('fullscreenchange', onFs);
     return () => {
+      disposed = true;
       ro.disconnect();
       window.removeEventListener('resize', onResize);
       document.removeEventListener('fullscreenchange', onFs);
@@ -344,6 +351,9 @@
   </div>
 
   <Sidebar bind:open={drawerOpen} bind:width={drawerWidth} {settings} onreset={resetSettings} onbeat={() => host?.alignBeat()} />
+  <!-- Loaded the first time it's opened (render/record settings, loop planner). -->
+  {#if exportUsed}
+    {#await import('./ui/ExportPanel.svelte') then { default: ExportPanel }}
   <ExportPanel
     bind:open={exportOpen}
     bind:width={drawerWidth}
@@ -356,6 +366,8 @@
     elapsed={recordElapsed}
     ontogglerecording={toggleRecording}
   />
+    {/await}
+  {/if}
 {/if}
 
 <!-- Stacked, so a "saved" notice doesn't cover an earlier warning. -->
