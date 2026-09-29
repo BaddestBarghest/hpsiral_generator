@@ -14,6 +14,7 @@
   } from 'flowbite-svelte-icons';
   import { settings, persistSettings, resetSettings } from './settings/store.svelte';
   import { readStored, writeStored } from './storage';
+  import { initCustomFont } from './ui/customFont.svelte';
   import { createRenderHost, type RenderHost } from './render/host';
   import type { FromRender, Viewport } from './render/protocol';
   import { LiveRecorder, supportedFormats, type RecordPrefs } from './record/liveRecorder';
@@ -178,6 +179,7 @@
         onEvent: onRenderEvent,
       });
       renderMode = host.mode;
+      void initCustomFont((data) => host?.setCustomFont(data));
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
       return;

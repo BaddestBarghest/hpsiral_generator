@@ -12,6 +12,8 @@ export interface RenderHost {
   setPlaying(p: boolean): void;
   /** Makes this moment a beat (tap tempo). */
   alignBeat(): void;
+  /** Sends the user's uploaded font (null = removed) to wherever the text is drawn. */
+  setCustomFont(data: ArrayBuffer | null): void;
   /** Starts an offline render; progress and the result arrive through `onEvent`. */
   startRender(job: RenderJob, output?: WritableStream): void;
   cancelRender(): void;
@@ -47,6 +49,7 @@ export function createRenderHost(canvas: HTMLCanvasElement, init: HostInit): Ren
       setViewport: (viewport) => post({ type: 'viewport', viewport }),
       setPlaying: (playing) => post({ type: 'playing', playing }),
       alignBeat: () => post({ type: 'alignBeat' }),
+      setCustomFont: (data) => post({ type: 'customFont', data }),
       startRender: (job, output) => post({ type: 'render', job, output }, output ? [output] : []),
       cancelRender: () => post({ type: 'cancelRender' }),
       destroy: () => worker.terminate(),
@@ -62,6 +65,8 @@ export function createRenderHost(canvas: HTMLCanvasElement, init: HostInit): Ren
     setViewport: (v) => loop.setViewport(v),
     setPlaying: (p) => loop.setPlaying(p),
     alignBeat: () => loop.alignBeat(),
+    // Inline, the main thread's copy (set by ui/customFont) is the one drawn with.
+    setCustomFont: () => loop.redraw(),
     startRender: (job, output) => void task.start(job, output),
     cancelRender: () => task.cancel(),
     destroy: () => loop.destroy(),

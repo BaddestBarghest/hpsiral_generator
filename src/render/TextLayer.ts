@@ -1,6 +1,6 @@
 import type { Settings } from '../settings/schema';
 import { isWall, type TextFrame } from '../engine/text';
-import { canvasFont, fontWeight, isFontReady, loadFont } from './fontLoader';
+import { canvasFont, familyName, fontWeight, isFontReady, loadFont } from './fontLoader';
 
 /** Wrapped lines may use this share of the screen width. */
 const MAX_LINE_WIDTH = 0.9;
@@ -58,7 +58,7 @@ export class TextLayer {
     }
     const wall = isWall(s);
     const layout = wall ? [s.textLayout, text.slot, s.textLayout === 'wallAlt' ? text.alt : '', s.textX, s.textY, s.textWallDensity] : [];
-    const key = JSON.stringify([ready, phrase, s.textFont, weight, s.textSize, s.textColor, s.textOutline, s.textOutlineColor, s.textGlow, s.textGlowColor, width, height, layout]);
+    const key = JSON.stringify([ready, phrase, familyName(s.textFont, weight), weight, s.textSize, s.textColor, s.textOutline, s.textOutlineColor, s.textGlow, s.textGlowColor, width, height, layout]);
     if (key === this.key) return;
     this.key = key;
     this.prepare(s, width, height);

@@ -54,6 +54,11 @@ export class RenderLoop {
     this.clock.reset();
   }
 
+  /** Draws again even while paused (e.g. the text font changed). */
+  redraw(): void {
+    this.dirty = true;
+  }
+
   /** Makes this moment a beat (tap tempo), so beat effects line up with the taps. */
   alignBeat(): void {
     this.tl = alignBeat(this.tl);

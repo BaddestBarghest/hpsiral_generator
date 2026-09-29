@@ -14,6 +14,8 @@ export type ToRender =
   | { type: 'viewport'; viewport: Viewport }
   | { type: 'playing'; playing: boolean }
   | { type: 'alignBeat' }
+  /** The user's uploaded font file, or null when removed. */
+  | { type: 'customFont'; data: ArrayBuffer | null }
   /** `output`: stream to write the file into (transferred); omitted = return the bytes. */
   | { type: 'render'; job: RenderJob; output?: WritableStream }
   | { type: 'cancelRender' };

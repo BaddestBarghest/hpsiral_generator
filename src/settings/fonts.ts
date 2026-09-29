@@ -26,6 +26,11 @@ export const FONTS = [
 
 export type FontId = (typeof FONTS)[number]['id'];
 
+/** The user's own uploaded font (stored in the browser; see ui/customFont.svelte.ts). */
+export const CUSTOM_FONT_ID = 'custom';
+/** Any font the text can use: a bundled one or the upload. */
+export type TextFontId = FontId | typeof CUSTOM_FONT_ID;
+
 /** Ids of fonts that have a real bold weight (the Bold switch only shows for these). */
 export const BOLD_FONT_IDS = FONTS.filter((f) => f.bold).map((f) => f.id);
 

@@ -4,7 +4,7 @@
   import { fromSlider, SLIDER_RESOLUTION, toSlider, type Param } from '../settings/schema';
   import ColorEditor from './color/ColorEditor.svelte';
   import FontPicker from './FontPicker.svelte';
-  import type { FontId } from '../settings/fonts';
+  import type { TextFontId } from '../settings/fonts';
 
   let {
     param,
@@ -128,7 +128,7 @@
     {/if}
   {:else if param.type === 'select' && param.picker === 'font'}
     <Label for={id} class="text-sm">{param.label}</Label>
-    <FontPicker {id} value={value as FontId} onchange={(v) => onchange(v)} />
+    <FontPicker {id} value={value as TextFontId} onchange={(v) => onchange(v)} />
   {:else if param.type === 'select'}
     <Label for={id} class="text-sm">{param.label}</Label>
     <Select

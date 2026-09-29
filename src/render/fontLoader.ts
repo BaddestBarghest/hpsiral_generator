@@ -1,4 +1,4 @@
-import { BOLD_FONT_IDS, fontFamily, type FontId } from '../settings/fonts';
+import { BOLD_FONT_IDS, CUSTOM_FONT_ID, fontFamily, type TextFontId } from '../settings/fonts';
 import type { Settings } from '../settings/schema';
 import { FONT_FILES } from './fontFiles';
 
@@ -14,37 +14,59 @@ function fontSet(): FontFaceSet | undefined {
 const status = new Map<string, 'loading' | 'loaded' | 'failed'>();
 const pending = new Map<string, Promise<void>>();
 
-export function fontWeight(id: FontId, bold: boolean): 400 | 700 {
+/** The user's uploaded font file, if any. Each upload gets a new version (and so a new family). */
+let custom: { data: ArrayBuffer; version: number } | null = null;
+let customVersion = 0;
+
+/**
+ * Sets (or with null, removes) the user's uploaded font. Called on the main thread for the
+ * font picker's previews and in the render worker for drawing; each keeps its own copy.
+ */
+export function setCustomFont(data: ArrayBuffer | null): void {
+  customVersion++;
+  custom = data ? { data, version: customVersion } : null;
+}
+
+/** CSS family name a font is registered under (uploads get a fresh name per version). */
+export function familyName(id: TextFontId, weight: 400 | 700 = 400): string {
+  return id === CUSTOM_FONT_ID ? fontFamily(`custom-${custom?.version ?? 0}`, 400) : fontFamily(id, weight);
+}
+
+const key = (id: TextFontId, weight: 400 | 700) => `${familyName(id, weight)}`;
+
+export function fontWeight(id: TextFontId, bold: boolean): 400 | 700 {
   return bold && (BOLD_FONT_IDS as readonly string[]).includes(id) ? 700 : 400;
 }
 
 /** Downloads and registers a font (once). Resolves even on failure; the fallback is used then. */
-export function loadFont(id: FontId, weight: 400 | 700 = 400): Promise<void> {
-  const key = `${id}:${weight}`;
-  const existing = pending.get(key);
+export function loadFont(id: TextFontId, weight: 400 | 700 = 400): Promise<void> {
+  const k = key(id, weight);
+  const existing = pending.get(k);
   if (existing) return existing;
   const set = fontSet();
-  const url = FONT_FILES[id]?.[weight];
-  if (!set || !url || typeof FontFace === 'undefined') {
-    status.set(key, 'failed');
+  let source: string | ArrayBuffer | undefined;
+  if (id === CUSTOM_FONT_ID) source = custom?.data.slice(0);
+  else source = FONT_FILES[id]?.[weight] && `url(${FONT_FILES[id][weight]})`;
+  if (!set || !source || typeof FontFace === 'undefined') {
+    status.set(k, 'failed');
     return Promise.resolve();
   }
-  status.set(key, 'loading');
-  const promise = new FontFace(fontFamily(id, weight), `url(${url})`, { weight: String(weight) })
+  status.set(k, 'loading');
+  const promise = new FontFace(familyName(id, weight), source, { weight: String(weight) })
     .load()
     .then((face) => {
       set.add(face);
-      status.set(key, 'loaded');
+      status.set(k, 'loaded');
     })
     .catch(() => {
-      status.set(key, 'failed');
+      status.set(k, 'failed');
     });
-  pending.set(key, promise);
+  pending.set(k, promise);
   return promise;
 }
 
-export function isFontReady(id: FontId, weight: 400 | 700): boolean {
-  return status.get(`${id}:${weight}`) === 'loaded';
+export function isFontReady(id: TextFontId, weight: 400 | 700): boolean {
+  return status.get(key(id, weight)) === 'loaded';
 }
 
 /**
@@ -52,11 +74,22 @@ export function isFontReady(id: FontId, weight: 400 | 700): boolean {
  * Chromium permanently caches a family that a worker canvas asked for before it was
  * registered, and would keep drawing the fallback even after the font arrives.
  */
-export function canvasFont(id: FontId, weight: 400 | 700, px: number): string {
-  return isFontReady(id, weight) ? `${weight} ${px}px "${fontFamily(id, weight)}", ${FALLBACK}` : `${weight} ${px}px ${FALLBACK}`;
+export function canvasFont(id: TextFontId, weight: 400 | 700, px: number): string {
+  return isFontReady(id, weight) ? `${weight} ${px}px "${familyName(id, weight)}", ${FALLBACK}` : `${weight} ${px}px ${FALLBACK}`;
 }
 
 /** Makes sure the text font is ready before an offline render starts drawing frames. */
 export async function ensureTextFont(s: Settings): Promise<void> {
   if (s.textEnabled) await loadFont(s.textFont, fontWeight(s.textFont, s.textBold));
+}
+
+/** Checks that `data` is a font the browser can use (for validating uploads). */
+export async function isUsableFont(data: ArrayBuffer): Promise<boolean> {
+  if (typeof FontFace === 'undefined') return false;
+  try {
+    await new FontFace('HG upload check', data.slice(0)).load();
+    return true;
+  } catch {
+    return false;
+  }
 }

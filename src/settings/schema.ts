@@ -1,7 +1,7 @@
 // Single source of truth for every user-facing parameter.
 // The UI, persistence/validation and renderer uniforms are all driven from this table.
 
-import { BOLD_FONT_IDS, FONTS } from './fonts';
+import { BOLD_FONT_IDS, CUSTOM_FONT_ID, FONTS } from './fonts';
 
 export type Group = 'Spiral' | 'Colour' | 'Aux. spiral' | 'Rhythm' | 'Text' | 'Display';
 
@@ -16,7 +16,7 @@ interface Base<K extends string> {
   showIf?: Readonly<Record<string, readonly string[]>>;
 }
 
-const FONT_OPTIONS = FONTS.map((f) => ({ value: f.id, label: f.label }));
+const FONT_OPTIONS = [...FONTS.map((f) => ({ value: f.id, label: f.label })), { value: CUSTOM_FONT_ID, label: 'Your font' } as const];
 
 const SPIRAL_MODES = ['archimedean', 'logarithmic', 'power'] as const;
 

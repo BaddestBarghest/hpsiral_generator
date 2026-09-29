@@ -2,6 +2,7 @@
 import { RenderLoop } from './loop';
 import { RenderTask } from './renderTask';
 import type { Emit, ToRender } from './protocol';
+import { setCustomFont } from './fontLoader';
 
 declare const self: DedicatedWorkerGlobalScope;
 
@@ -29,6 +30,10 @@ self.onmessage = (e: MessageEvent<ToRender>) => {
         break;
       case 'alignBeat':
         loop?.alignBeat();
+        break;
+      case 'customFont':
+        setCustomFont(msg.data);
+        loop?.redraw();
         break;
       case 'render':
         void task?.start(msg.job, msg.output);
