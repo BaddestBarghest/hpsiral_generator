@@ -137,10 +137,6 @@ export const schema = [
   { key: 'vignette', label: 'Strength', group: 'Colour', section: 'Vignette', type: 'range', min: 0, max: 1, step: 0.01, default: 0 },
   { key: 'vignetteSize', label: 'Size', group: 'Colour', section: 'Vignette', type: 'range', min: 0.2, max: 1.6, step: 0.01, default: 0.9 },
   { key: 'vignetteColor', label: 'Colour', group: 'Colour', section: 'Vignette', type: 'color', default: '#000000' },
-  { key: 'dotEnabled', label: 'Show centre dot', group: 'Colour', section: 'Centre dot', type: 'toggle', default: false },
-  { key: 'dotSize', label: 'Size', group: 'Colour', section: 'Centre dot', type: 'range', min: 0.005, max: 0.3, step: 0.005, default: 0.04, showIf: { dotEnabled: ['true'] } },
-  { key: 'dotSoftness', label: 'Softness', group: 'Colour', section: 'Centre dot', type: 'range', min: 0, max: 1, step: 0.01, default: 0.1, showIf: { dotEnabled: ['true'] } },
-  { key: 'dotColor', label: 'Colour', group: 'Colour', section: 'Centre dot', type: 'color', default: '#f5cb5c', showIf: { dotEnabled: ['true'] } },
 
   // ── Auxiliary spiral ──────────────────────────────────────────────────
   // A second pattern drawn over the first: arms only (its gaps are see-through).

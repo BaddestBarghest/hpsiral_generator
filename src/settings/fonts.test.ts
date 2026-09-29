@@ -17,8 +17,8 @@ describe('fonts', () => {
     for (const f of FONTS) expect(FONT_CATEGORIES).toContain(f.category);
   });
 
-  it('keeps the original font ids valid for saved settings', () => {
-    for (const id of ['sans', 'serif', 'mono', 'impact']) expect(sanitize({ textFont: id }).textFont).toBe(id);
-    expect(sanitize({ textFont: 'comic-sans' }).textFont).toBe(defaults().textFont);
+  it('keeps surviving font ids and resets removed ones to the default', () => {
+    for (const id of ['sans', 'montserrat', 'oswald', 'bebas', 'impact']) expect(sanitize({ textFont: id }).textFont).toBe(id);
+    for (const id of ['serif', 'mono', 'creepster', 'comic-sans']) expect(sanitize({ textFont: id }).textFont).toBe(defaults().textFont);
   });
 });

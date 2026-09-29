@@ -40,10 +40,6 @@ uniform bool uS2Enabled;
 uniform float uS2Opacity;
 uniform int uS2Blend;        // 0 normal, 1 add, 2 multiply, 3 screen, 4 difference
 
-uniform bool uDotEnabled;
-uniform float uDotSize;
-uniform float uDotSoftness;
-uniform vec3 uDotColor;
 
 uniform float uHueShift;     // radians
 uniform float uFlash;        // 0..1 mix towards uFlashColor (beat flash / strobe)
@@ -230,14 +226,6 @@ void main() {
   }
 
   if (uHueShift != 0.0) col = clamp(hueRotate(col, uHueShift), 0.0, 1.0);
-
-  // ── Centre dot (screen-sized, unaffected by zoom and hue roll) ──────────
-  if (uDotEnabled) {
-    float d = length(screen);
-    float aa = 2.0 / minRes;
-    float soft = uDotSoftness * uDotSize;
-    col = mix(col, uDotColor, 1.0 - smoothstep(uDotSize - soft - aa, uDotSize + aa, d));
-  }
 
   // ── Text (not hue-rolled; inverted and flashed with everything else) ─────
   if (uTextOn) {

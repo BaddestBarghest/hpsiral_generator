@@ -1,29 +1,27 @@
 // Text fonts: bundled open-licence (SIL OFL) Google Fonts, so text looks the same on every
-// device and works offline. The files live in render/fontFiles.ts and load on demand.
-// The first four ids predate the bundled fonts and are kept so saved settings still work.
+// device and works offline. Clean sans-serifs only — no novelty or serif faces. The files
+// live in render/fontFiles.ts and load on demand. Earlier ids that no longer exist fall back
+// to the default via `sanitize`.
 
-export const FONT_CATEGORIES = ['Clean', 'Bold', 'Retro & sci-fi', 'Elegant', 'Handwritten', 'Spooky', 'Code'] as const;
+export const FONT_CATEGORIES = ['Clean', 'Geometric', 'Condensed & heavy'] as const;
 export type FontCategory = (typeof FONT_CATEGORIES)[number];
 
 export const FONTS = [
   { id: 'sans', label: 'Inter', category: 'Clean', bold: true },
-  { id: 'montserrat', label: 'Montserrat', category: 'Clean', bold: true },
-  { id: 'oswald', label: 'Oswald', category: 'Clean', bold: true },
-  { id: 'bebas', label: 'Bebas Neue', category: 'Bold', bold: false },
-  { id: 'impact', label: 'Anton', category: 'Bold', bold: false },
-  { id: 'bungee', label: 'Bungee', category: 'Bold', bold: false },
-  { id: 'righteous', label: 'Righteous', category: 'Retro & sci-fi', bold: false },
-  { id: 'monoton', label: 'Monoton', category: 'Retro & sci-fi', bold: false },
-  { id: 'audiowide', label: 'Audiowide', category: 'Retro & sci-fi', bold: false },
-  { id: 'orbitron', label: 'Orbitron', category: 'Retro & sci-fi', bold: true },
-  { id: 'pixel', label: 'Press Start 2P', category: 'Retro & sci-fi', bold: false },
-  { id: 'serif', label: 'Playfair Display', category: 'Elegant', bold: true },
-  { id: 'cinzel', label: 'Cinzel', category: 'Elegant', bold: true },
-  { id: 'pacifico', label: 'Pacifico', category: 'Handwritten', bold: false },
-  { id: 'greatvibes', label: 'Great Vibes', category: 'Handwritten', bold: false },
-  { id: 'caveat', label: 'Caveat', category: 'Handwritten', bold: true },
-  { id: 'creepster', label: 'Creepster', category: 'Spooky', bold: false },
-  { id: 'mono', label: 'JetBrains Mono', category: 'Code', bold: true },
+  { id: 'manrope', label: 'Manrope', category: 'Clean', bold: true },
+  { id: 'dmsans', label: 'DM Sans', category: 'Clean', bold: true },
+  { id: 'worksans', label: 'Work Sans', category: 'Clean', bold: true },
+  { id: 'raleway', label: 'Raleway', category: 'Clean', bold: true },
+  { id: 'montserrat', label: 'Montserrat', category: 'Geometric', bold: true },
+  { id: 'poppins', label: 'Poppins', category: 'Geometric', bold: true },
+  { id: 'outfit', label: 'Outfit', category: 'Geometric', bold: true },
+  { id: 'spartan', label: 'League Spartan', category: 'Geometric', bold: true },
+  { id: 'josefin', label: 'Josefin Sans', category: 'Geometric', bold: true },
+  { id: 'oswald', label: 'Oswald', category: 'Condensed & heavy', bold: true },
+  { id: 'barlow', label: 'Barlow Condensed', category: 'Condensed & heavy', bold: true },
+  { id: 'bebas', label: 'Bebas Neue', category: 'Condensed & heavy', bold: false },
+  { id: 'impact', label: 'Anton', category: 'Condensed & heavy', bold: false },
+  { id: 'archivo', label: 'Archivo Black', category: 'Condensed & heavy', bold: false },
 ] as const satisfies readonly { id: string; label: string; category: FontCategory; bold: boolean }[];
 
 export type FontId = (typeof FONTS)[number]['id'];

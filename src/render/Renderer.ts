@@ -230,10 +230,6 @@ export class Renderer {
     gl.uniform1f(loc('uS2Opacity'), s.s2Opacity);
     gl.uniform1i(loc('uS2Blend'), BLENDS[s.s2Blend]);
 
-    gl.uniform1i(loc('uDotEnabled'), s.dotEnabled ? 1 : 0);
-    gl.uniform1f(loc('uDotSize'), s.dotSize);
-    gl.uniform1f(loc('uDotSoftness'), s.dotSoftness);
-    gl.uniform3fv(loc('uDotColor'), hexToRgb(s.dotColor));
 
     gl.uniform1f(loc('uHueShift'), tl.huePhase * Math.PI * 2);
     gl.uniform1f(loc('uFlash'), pulse.flash);
