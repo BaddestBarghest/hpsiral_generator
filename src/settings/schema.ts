@@ -1,7 +1,7 @@
 // Single source of truth for every user-facing parameter.
 // The UI, persistence/validation and renderer uniforms are all driven from this table.
 
-export type Group = 'Spiral' | 'Colour' | 'Aux. spiral' | 'Rhythm' | 'Effects' | 'Output';
+export type Group = 'Spiral' | 'Colour' | 'Aux. spiral' | 'Rhythm' | 'Text' | 'Output';
 
 interface Base<K extends string> {
   key: K;
@@ -50,7 +50,14 @@ export interface ColorParam<K extends string = string> extends Base<K> {
   default: string;
 }
 
-export type Param = RangeParam | SelectParam | ToggleParam | PaletteParam | ColorParam;
+export interface TextareaParam<K extends string = string> extends Base<K> {
+  type: 'textarea';
+  default: string;
+  rows: number;
+  maxLength: number;
+}
+
+export type Param = RangeParam | SelectParam | ToggleParam | PaletteParam | ColorParam | TextareaParam;
 
 /** Colours per band (arms or gaps). */
 export const MAX_BAND_COLORS = 3;
@@ -105,6 +112,10 @@ export const schema = [
   { key: 'speed', label: 'Speed', group: 'Spiral', type: 'range', min: 0, max: 4, step: 0.01, default: 0.5, unit: 'cycles/s' },
   { key: 'direction', label: 'Direction', group: 'Spiral', type: 'select', default: 'inward', options: DIRECTIONS },
   { key: 'mirror', label: 'Mirror (reverse twist)', group: 'Spiral', type: 'toggle', default: false, showIf: { mode: SPIRAL_MODES } },
+  { key: 'twist', label: 'Twist', group: 'Spiral', section: 'Motion', type: 'range', min: -3, max: 3, step: 0.01, default: 0, unit: 'turns', help: 'Bends the arms more the further out they are.' },
+  { key: 'wobble', label: 'Wobble', group: 'Spiral', section: 'Motion', type: 'range', min: 0, max: 1, step: 0.01, default: 0, help: 'Ripples the arms sideways.' },
+  { key: 'wobbleFreq', label: 'Wobble ripples', group: 'Spiral', section: 'Motion', type: 'range', min: 0.5, max: 12, step: 0.1, default: 3 },
+  { key: 'wobbleSpeed', label: 'Wobble speed', group: 'Spiral', section: 'Motion', type: 'range', min: 0, max: 3, step: 0.01, default: 0.5, unit: 'cycles/s' },
 
   // ── Colour ────────────────────────────────────────────────────────────
   // Colours never change the geometry: each cycle is one arm stripe + one gap,
@@ -115,7 +126,15 @@ export const schema = [
   { key: 'gapColors', label: 'Colours', group: 'Colour', section: 'Gaps', type: 'palette', minColors: 1, maxColors: MAX_BAND_COLORS, default: ['#000000'] },
   { key: 'gapColorMode', label: 'Colour mode', group: 'Colour', section: 'Gaps', type: 'select', default: 'static', options: COLOR_MODES },
   { key: 'gapShift', label: 'Colour shift speed', group: 'Colour', section: 'Gaps', type: 'range', min: 0, max: 2, step: 0.01, default: 0, unit: 'cycles/s' },
-  { key: 'hueRoll', label: 'Hue roll speed', group: 'Colour', section: 'Effects', type: 'range', min: 0, max: 1, step: 0.005, default: 0, unit: 'rev/s', help: 'Rotates the hue of every colour.' },
+  { key: 'hueRoll', label: 'Hue roll speed', group: 'Colour', section: 'Hue', type: 'range', min: 0, max: 1, step: 0.005, default: 0, unit: 'rev/s', help: 'Rotates the hue of every colour.' },
+  { key: 'trails', label: 'Afterimage trails', group: 'Colour', section: 'Afterimage', type: 'range', min: 0, max: 0.95, step: 0.01, default: 0, help: 'Leaves fading echoes of previous frames.' },
+  { key: 'vignette', label: 'Strength', group: 'Colour', section: 'Vignette', type: 'range', min: 0, max: 1, step: 0.01, default: 0 },
+  { key: 'vignetteSize', label: 'Size', group: 'Colour', section: 'Vignette', type: 'range', min: 0.2, max: 1.6, step: 0.01, default: 0.9 },
+  { key: 'vignetteColor', label: 'Colour', group: 'Colour', section: 'Vignette', type: 'color', default: '#000000' },
+  { key: 'dotEnabled', label: 'Show centre dot', group: 'Colour', section: 'Centre dot', type: 'toggle', default: false },
+  { key: 'dotSize', label: 'Size', group: 'Colour', section: 'Centre dot', type: 'range', min: 0.005, max: 0.3, step: 0.005, default: 0.04, showIf: { dotEnabled: ['true'] } },
+  { key: 'dotSoftness', label: 'Softness', group: 'Colour', section: 'Centre dot', type: 'range', min: 0, max: 1, step: 0.01, default: 0.1, showIf: { dotEnabled: ['true'] } },
+  { key: 'dotColor', label: 'Colour', group: 'Colour', section: 'Centre dot', type: 'color', default: '#f5cb5c', showIf: { dotEnabled: ['true'] } },
 
   // ── Auxiliary spiral ──────────────────────────────────────────────────
   // A second pattern drawn over the first: arms only (its gaps are see-through).
@@ -176,19 +195,60 @@ export const schema = [
   { key: 'zoomPulseRate', label: 'Rate', group: 'Rhythm', section: 'Zoom pulse', type: 'select', default: '2', options: PULSE_RATES },
   { key: 'flashUnlock', label: 'Allow more than 3 flashes per second', group: 'Rhythm', section: 'Safety', type: 'toggle', default: false, help: '⚠ Rapid flashing can trigger seizures. While off, flashes and inversions skip beats to stay at or below 3 per second.' },
 
-  // ── Effects ───────────────────────────────────────────────────────────
-  { key: 'twist', label: 'Twist', group: 'Effects', section: 'Motion', type: 'range', min: -3, max: 3, step: 0.01, default: 0, unit: 'turns', help: 'Bends the arms more the further out they are.' },
-  { key: 'wobble', label: 'Wobble', group: 'Effects', section: 'Motion', type: 'range', min: 0, max: 1, step: 0.01, default: 0, help: 'Ripples the arms sideways.' },
-  { key: 'wobbleFreq', label: 'Wobble ripples', group: 'Effects', section: 'Motion', type: 'range', min: 0.5, max: 12, step: 0.1, default: 3 },
-  { key: 'wobbleSpeed', label: 'Wobble speed', group: 'Effects', section: 'Motion', type: 'range', min: 0, max: 3, step: 0.01, default: 0.5, unit: 'cycles/s' },
-  { key: 'trails', label: 'Afterimage trails', group: 'Effects', section: 'Afterimage', type: 'range', min: 0, max: 0.95, step: 0.01, default: 0, help: 'Leaves fading echoes of previous frames.' },
-  { key: 'vignette', label: 'Strength', group: 'Effects', section: 'Vignette', type: 'range', min: 0, max: 1, step: 0.01, default: 0 },
-  { key: 'vignetteSize', label: 'Size', group: 'Effects', section: 'Vignette', type: 'range', min: 0.2, max: 1.6, step: 0.01, default: 0.9 },
-  { key: 'vignetteColor', label: 'Colour', group: 'Effects', section: 'Vignette', type: 'color', default: '#000000' },
-  { key: 'dotEnabled', label: 'Show centre dot', group: 'Effects', section: 'Centre dot', type: 'toggle', default: false },
-  { key: 'dotSize', label: 'Size', group: 'Effects', section: 'Centre dot', type: 'range', min: 0.005, max: 0.3, step: 0.005, default: 0.04, showIf: { dotEnabled: ['true'] } },
-  { key: 'dotSoftness', label: 'Softness', group: 'Effects', section: 'Centre dot', type: 'range', min: 0, max: 1, step: 0.01, default: 0.1, showIf: { dotEnabled: ['true'] } },
-  { key: 'dotColor', label: 'Colour', group: 'Effects', section: 'Centre dot', type: 'color', default: '#f5cb5c', showIf: { dotEnabled: ['true'] } },
+  // ── Text ──────────────────────────────────────────────────────────────
+  // Timed phrases; see engine/text.ts.
+  { key: 'textEnabled', label: 'Show text', group: 'Text', section: 'Phrases', type: 'toggle', default: false },
+  { key: 'textPhrases', label: 'Phrases (one per line)', group: 'Text', section: 'Phrases', type: 'textarea', rows: 6, maxLength: 4000, default: 'Relax\nBreathe in\nBreathe out\nLet go\nFocus on the centre', showIf: { textEnabled: ['true'] } },
+  {
+    key: 'textOrder', label: 'Order', group: 'Text', section: 'Phrases', type: 'select', default: 'sequence', showIf: { textEnabled: ['true'] },
+    options: [
+      { value: 'sequence', label: 'In order' },
+      { value: 'shuffle', label: 'Shuffled' },
+    ],
+  },
+  {
+    key: 'textSync', label: 'Change phrases', group: 'Text', section: 'Timing', type: 'select', default: 'off', showIf: { textEnabled: ['true'] },
+    options: [
+      { value: 'off', label: 'On a timer' },
+      { value: '1', label: 'Every beat' },
+      { value: '2', label: 'Every 2 beats' },
+      { value: '4', label: 'Every 4 beats' },
+      { value: '8', label: 'Every 8 beats' },
+      { value: '16', label: 'Every 16 beats' },
+    ],
+  },
+  { key: 'textInterval', label: 'Change every', group: 'Text', section: 'Timing', type: 'range', min: 0.2, max: 30, step: 0.1, default: 4, unit: 's', showIf: { textEnabled: ['true'], textSync: ['off'] } },
+  { key: 'textDuration', label: 'Show for', group: 'Text', section: 'Timing', type: 'range', min: 0.03, max: 30, step: 0.01, default: 2.5, unit: 's', help: 'Under 0.1 s gives subliminal flashes. Never longer than the time between phrases.', showIf: { textEnabled: ['true'] } },
+  {
+    key: 'textAnimation', label: 'Animation', group: 'Text', section: 'Timing', type: 'select', default: 'fade', showIf: { textEnabled: ['true'] },
+    options: [
+      { value: 'none', label: 'None' },
+      { value: 'fade', label: 'Fade in and out' },
+      { value: 'zoom', label: 'Slow zoom' },
+      { value: 'pop', label: 'Pop' },
+    ],
+  },
+  {
+    key: 'textFont', label: 'Font', group: 'Text', section: 'Style', type: 'select', default: 'sans', showIf: { textEnabled: ['true'] },
+    options: [
+      { value: 'sans', label: 'Sans-serif' },
+      { value: 'serif', label: 'Serif' },
+      { value: 'mono', label: 'Monospace' },
+      { value: 'impact', label: 'Impact (condensed)' },
+    ],
+  },
+  { key: 'textBold', label: 'Bold', group: 'Text', section: 'Style', type: 'toggle', default: true, showIf: { textEnabled: ['true'] } },
+  { key: 'textUppercase', label: 'Uppercase', group: 'Text', section: 'Style', type: 'toggle', default: false, showIf: { textEnabled: ['true'] } },
+  { key: 'textSize', label: 'Size', group: 'Text', section: 'Style', type: 'range', min: 0.03, max: 0.4, step: 0.005, default: 0.12, showIf: { textEnabled: ['true'] } },
+  { key: 'textY', label: 'Vertical position', group: 'Text', section: 'Style', type: 'range', min: -0.8, max: 0.8, step: 0.01, default: 0, help: 'Negative moves it down, positive up.', showIf: { textEnabled: ['true'] } },
+  { key: 'textColor', label: 'Colour', group: 'Text', section: 'Style', type: 'color', default: '#ffffff', showIf: { textEnabled: ['true'] } },
+  { key: 'textOpacity', label: 'Opacity', group: 'Text', section: 'Style', type: 'range', min: 0, max: 1, step: 0.01, default: 1, showIf: { textEnabled: ['true'] } },
+  { key: 'textOutline', label: 'Outline', group: 'Text', section: 'Style', type: 'range', min: 0, max: 0.3, step: 0.01, default: 0.08, help: 'Keeps text readable over the stripes.', showIf: { textEnabled: ['true'] } },
+  { key: 'textOutlineColor', label: 'Outline colour', group: 'Text', section: 'Style', type: 'color', default: '#000000', showIf: { textEnabled: ['true'] } },
+  { key: 'textFlash', label: 'Flash when text appears', group: 'Text', section: 'Flash', type: 'toggle', default: false, help: 'A short flash of the whole screen as each phrase appears. Limited to 3 per second unless unlocked in Rhythm → Safety.', showIf: { textEnabled: ['true'] } },
+  { key: 'textFlashColor', label: 'Colour', group: 'Text', section: 'Flash', type: 'color', default: '#ffffff', showIf: { textEnabled: ['true'], textFlash: ['true'] } },
+  { key: 'textFlashLength', label: 'Length', group: 'Text', section: 'Flash', type: 'range', min: 0.03, max: 0.5, step: 0.01, default: 0.12, unit: 's', showIf: { textEnabled: ['true'], textFlash: ['true'] } },
+  { key: 'textFlashIntensity', label: 'Intensity', group: 'Text', section: 'Flash', type: 'range', min: 0, max: 1, step: 0.01, default: 0.7, showIf: { textEnabled: ['true'], textFlash: ['true'] } },
 
   // ── Display ───────────────────────────────────────────────────────────
   { key: 'renderScale', label: 'Render scale', group: 'Output', section: 'Display', type: 'range', min: 0.25, max: 1, step: 0.05, default: 1 },
@@ -210,13 +270,14 @@ type ValueOf<P> = P extends { type: 'range' } ? number
   : P extends { type: 'toggle' } ? boolean
   : P extends { type: 'palette' } ? string[]
   : P extends { type: 'color' } ? string
+  : P extends { type: 'textarea' } ? string
   : P extends { type: 'select'; options: readonly { value: infer V }[] } ? V
   : never;
 
 export type Settings = { -readonly [P in Entry as P['key']]: ValueOf<P> };
 export type SettingKey = keyof Settings;
 
-export const groups: Group[] = ['Spiral', 'Colour', 'Aux. spiral', 'Rhythm', 'Effects', 'Output'];
+export const groups: Group[] = ['Spiral', 'Colour', 'Aux. spiral', 'Rhythm', 'Text', 'Output'];
 
 export function defaults(): Settings {
   const out: Record<string, unknown> = {};
@@ -273,6 +334,9 @@ export function sanitize(input: unknown): Settings {
         break;
       case 'color':
         if (typeof v === 'string' && HEX.test(v)) out[p.key] = v.toLowerCase();
+        break;
+      case 'textarea':
+        if (typeof v === 'string') out[p.key] = v.slice(0, p.maxLength);
         break;
     }
   }

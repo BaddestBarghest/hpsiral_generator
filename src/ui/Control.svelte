@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button, Helper, Label, Range, Select, Toggle } from 'flowbite-svelte';
+  import { Button, Helper, Label, Range, Select, Textarea, Toggle } from 'flowbite-svelte';
   import { CloseOutline, PlusOutline } from 'flowbite-svelte-icons';
   import type { Param } from '../settings/schema';
   import ColorEditor from './color/ColorEditor.svelte';
@@ -99,6 +99,17 @@
     <Toggle size="small" checked={value as boolean} onchange={(e) => onchange(e.currentTarget.checked)}>
       {param.label}
     </Toggle>
+  {:else if param.type === 'textarea'}
+    <Label for={id} class="text-sm">{param.label}</Label>
+    <Textarea
+      {id}
+      rows={param.rows}
+      maxlength={param.maxLength}
+      spellcheck={false}
+      class="w-full resize-y text-sm"
+      value={value as string}
+      oninput={(e) => onchange(e.currentTarget.value)}
+    />
   {:else if param.type === 'color'}
     <div class="flex items-center justify-between">
       <Label for={id} class="text-sm">{param.label}</Label>

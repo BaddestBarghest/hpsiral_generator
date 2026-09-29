@@ -83,6 +83,7 @@ function colorsAnimate({ settings: s }: RenderJob): boolean {
   return (
     s.hueRoll !== 0 ||
     s.trails > 0 || // blended echoes create colours no sample frame contains
+    s.textEnabled || // text (and its fades/flash) may not appear in any sample frame
     (s.armColors.length > 1 && s.armShift !== 0) ||
     (s.gapColors.length > 1 && s.gapShift !== 0) ||
     (s.s2Enabled && s.s2Colors.length > 1 && s.s2Shift !== 0)

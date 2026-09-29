@@ -1,4 +1,5 @@
 import type { Settings } from '../settings/schema';
+import { phraseList, textSlotBeats } from './text';
 
 /**
  * Tempo-driven effects. Everything is a pure function of the beat position, so live
@@ -104,6 +105,9 @@ export function beatPeriod(s: Settings): number {
   if (s.flashMode !== 'off') periods.push(flashPeriodBeats(s, Number(s.flashRate)));
   if (s.invertEnabled) periods.push(flashPeriodBeats(s, Number(s.invertRate)));
   if (s.zoomPulse > 0) periods.push(Number(s.zoomPulseRate));
+  // Beat-synced text repeats once every phrase has had its slot.
+  const phrases = phraseList(s).length;
+  if (s.textEnabled && phrases > 0 && textSlotBeats(s) > 0) periods.push(textSlotBeats(s) * phrases);
   if (periods.length === 0) return 0;
   // All periods are multiples of a quarter beat.
   const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));

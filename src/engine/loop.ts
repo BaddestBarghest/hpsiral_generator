@@ -1,5 +1,6 @@
 import type { Settings } from '../settings/schema';
 import { beatPeriod, beatsPerSecond, rampMean } from './rhythm';
+import { phraseList, textSlotBeats } from './text';
 
 /**
  * Seamless loops: every periodic motion must complete a whole number of cycles in the
@@ -35,7 +36,7 @@ export function flowPeriod2(s: Settings): number {
   return s.s2Mode === 'concentric' ? s.s2Colors.length : Math.round(s.s2Arms);
 }
 
-type RateKey = 'speed' | 'hueRoll' | 'armShift' | 'gapShift' | 's2Speed' | 's2Shift' | 'wobbleSpeed' | 'bpm';
+type RateKey = 'speed' | 'hueRoll' | 'armShift' | 'gapShift' | 's2Speed' | 's2Shift' | 'wobbleSpeed' | 'bpm' | 'textInterval';
 
 interface Motion {
   key: RateKey;
@@ -55,6 +56,7 @@ function motions(s: Settings): Motion[] {
   // average; over whole ramp cycles (guaranteed by the tempo motion) that is exact.
   const mean = rampMean(s);
   const beats = beatPeriod(s);
+  const phrases = phraseList(s).length;
   const all: Motion[] = [
     { key: 'speed', label: 'Speed', rate: s.speed * mean, period: flowPeriod(s), toSetting: (r) => r / mean },
     { key: 'hueRoll', label: 'Hue roll speed', rate: s.hueRoll, period: 1, toSetting: same },
@@ -65,8 +67,16 @@ function motions(s: Settings): Motion[] {
     { key: 's2Speed', label: 'Auxiliary spiral speed', rate: s.s2Enabled ? s.s2Speed * mean : 0, period: flowPeriod2(s), toSetting: (r) => r / mean },
     { key: 's2Shift', label: 'Auxiliary spiral colour shift', rate: s.s2Enabled && s.s2Colors.length > 1 ? s.s2Shift : 0, period: s.s2Colors.length, toSetting: same },
     { key: 'wobbleSpeed', label: 'Wobble speed', rate: s.wobble > 0 ? s.wobbleSpeed : 0, period: 1, toSetting: same },
-    // Ramp cycles and flash/inversion/zoom pulses all repeat every `beats` beats.
+    // Ramp cycles, beat pulses and beat-synced text all repeat every `beats` beats.
     { key: 'bpm', label: 'Tempo (BPM)', rate: beats > 0 ? beatsPerSecond(s) : 0, period: beats, toSetting: (r) => r * 60 },
+    // Text timed in seconds: one slot per `textInterval`; the sequence repeats after every phrase.
+    {
+      key: 'textInterval',
+      label: 'Text: change every (s)',
+      rate: s.textEnabled && phrases > 0 && textSlotBeats(s) === 0 ? 1 / s.textInterval : 0,
+      period: phrases,
+      toSetting: (r) => 1 / r,
+    },
   ];
   return all.filter((m) => Math.abs(m.rate) > 1e-9);
 }

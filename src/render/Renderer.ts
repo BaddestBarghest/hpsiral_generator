@@ -2,6 +2,8 @@ import type { Settings } from '../settings/schema';
 import { MAX_BAND_COLORS } from '../settings/schema';
 import { COLOR_PERIOD, type TimelineState } from '../engine/timeline';
 import { pulses } from '../engine/rhythm';
+import { textFrame } from '../engine/text';
+import { TextLayer } from './TextLayer';
 import { averageRgb, hexToRgb, type RGB } from './color';
 import {
   createContext,
@@ -48,6 +50,7 @@ export class Renderer {
   private scene!: Program;
   private post!: Program;
   private vao!: WebGLVertexArrayObject;
+  private text!: TextLayer;
   private lost = false;
   private colorBuf = new Float32Array(3 * MAX_BAND_COLORS * 3);
 
@@ -82,6 +85,7 @@ export class Renderer {
     this.scene = createProgram(gl, FULLSCREEN_VS, sceneFs);
     this.post = createProgram(gl, FULLSCREEN_VS, postFs);
     this.vao = gl.createVertexArray()!;
+    this.text = new TextLayer(gl);
   }
 
   get isLost(): boolean {
@@ -231,6 +235,19 @@ export class Renderer {
     gl.uniform1f(loc('uFlash'), pulse.flash);
     gl.uniform3fv(loc('uFlashColor'), hexToRgb(s.flashColor));
     gl.uniform1f(loc('uInvert'), pulse.invert);
+
+    const text = textFrame(s, tl.time, tl.beatPhase);
+    const textOn = text.phrase !== '' && text.alpha > 0;
+    if (textOn) this.text.update(s, text.phrase, width, height);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.text.texture);
+    gl.uniform1i(loc('uText'), 2);
+    gl.uniform1i(loc('uTextOn'), textOn ? 1 : 0);
+    gl.uniform1f(loc('uTextAlpha'), text.alpha);
+    gl.uniform1f(loc('uTextScale'), text.scale);
+    gl.uniform1f(loc('uTextY'), s.textY);
+    gl.uniform1f(loc('uTextFlash'), text.flash);
+    gl.uniform3fv(loc('uTextFlashColor'), hexToRgb(s.textFlashColor));
     gl.uniform1i(loc('uDither'), dither ? 1 : 0);
 
     gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -260,6 +277,7 @@ export class Renderer {
   destroy(): void {
     this.canvas.removeEventListener('webglcontextlost', this.onLost as EventListener);
     this.canvas.removeEventListener('webglcontextrestored', this.onRestored as EventListener);
+    this.text.destroy();
     this.gl.getExtension('WEBGL_lose_context')?.loseContext();
   }
 }

@@ -49,6 +49,15 @@ uniform float uHueShift;     // radians
 uniform float uFlash;        // 0..1 mix towards uFlashColor (beat flash / strobe)
 uniform vec3 uFlashColor;
 uniform float uInvert;       // 0..1 mix towards the inverted image (beat inversion)
+
+// Text overlay: premultiplied texture drawn centred on the canvas, animated here.
+uniform sampler2D uText;
+uniform bool uTextOn;
+uniform float uTextAlpha;
+uniform float uTextScale;    // zoom about the text centre
+uniform float uTextY;        // vertical offset (short screen half = 1)
+uniform float uTextFlash;    // 0..1 "flash when text appears"
+uniform vec3 uTextFlashColor;
 uniform bool uDither;        // only when drawing straight to the screen
 
 const float TAU = 6.283185307179586;
@@ -230,9 +239,21 @@ void main() {
     col = mix(col, uDotColor, 1.0 - smoothstep(uDotSize - soft - aa, uDotSize + aa, d));
   }
 
-  // Beat pulses apply to the whole image, dot included.
+  // ── Text (not hue-rolled; inverted and flashed with everything else) ─────
+  if (uTextOn) {
+    vec2 centre = 0.5 * uResolution + vec2(0.0, uTextY * 0.5 * minRes);
+    vec2 src = (gl_FragCoord.xy - centre) / uTextScale + 0.5 * uResolution;
+    vec2 uv = vec2(src.x / uResolution.x, 1.0 - src.y / uResolution.y);
+    if (all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0)))) {
+      vec4 t = texture(uText, uv) * uTextAlpha; // premultiplied
+      col = col * (1.0 - t.a) + t.rgb;
+    }
+  }
+
+  // Beat pulses and the text flash apply to the whole image.
   col = mix(col, 1.0 - col, uInvert);
   col = mix(col, uFlashColor, uFlash);
+  col = mix(col, uTextFlashColor, uTextFlash);
 
   if (uDither) {
     // ±0.5 LSB interleaved-gradient-noise dither breaks up 8-bit banding in gradients,

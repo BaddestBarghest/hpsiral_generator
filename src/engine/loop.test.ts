@@ -149,6 +149,19 @@ describe('planLoop', () => {
     expect(short.changes.map((c) => c.key)).toContain('bpm');
   });
 
+  it('closes the text cycle', () => {
+    const s: Settings = { ...defaults(), speed: 0.5, textEnabled: true, textPhrases: 'a\nb\nc', textInterval: 1.5 };
+    // flow 2 s, text 3 phrases × 1.5 s = 4.5 s → exact loop lcm(2, 4.5) = 18 s
+    expect(exactLoop(s, 30)?.seconds).toBeCloseTo(18);
+    const synced = { ...s, textSync: '2' as const, bpm: 120 }; // 3 × 2 beats = 3 s
+    expect(exactLoop(synced, 30)?.seconds).toBeCloseTo(6);
+    const short = planLoop({ ...s, textInterval: 1.37 }, 4, 30, 'short');
+    expect(short.changes.map((c) => c.key)).toContain('textInterval');
+    // After the loop, the text clock is on a whole number of phrase cycles.
+    const cycles = short.duration / (short.settings.textInterval * 3);
+    expect(Math.abs(cycles - Math.round(cycles))).toBeLessThan(1e-9);
+  });
+
   it('uses the other motions when the flow is still', () => {
     assertSeamless({ ...defaults(), speed: 0, hueRoll: 0.2 }, 2, 25);
   });
