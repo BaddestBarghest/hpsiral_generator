@@ -27,7 +27,14 @@ export function flowPeriod(s: Settings): number {
   return p;
 }
 
-type RateKey = 'speed' | 'hueRoll' | 'armShift' | 'gapShift';
+/** Same as `flowPeriod`, for the second spiral (arms only; its gaps are see-through). */
+export function flowPeriod2(s: Settings): number {
+  const perStripe = s.s2Colors.length > 1 && (s.s2ColorMode === 'static' || s.s2ColorMode === 'kaleido');
+  if (!perStripe) return 1;
+  return s.s2Mode === 'concentric' ? s.s2Colors.length : Math.round(s.s2Arms);
+}
+
+type RateKey = 'speed' | 'hueRoll' | 'armShift' | 'gapShift' | 's2Speed' | 's2Shift' | 'wobbleSpeed';
 
 interface Motion {
   key: RateKey;
@@ -44,6 +51,10 @@ function motions(s: Settings): Motion[] {
     // A single colour can't visibly shift, so it doesn't constrain the loop.
     { key: 'armShift', label: 'Arm colour shift', rate: s.armColors.length > 1 ? s.armShift : 0, period: s.armColors.length },
     { key: 'gapShift', label: 'Gap colour shift', rate: s.gapColors.length > 1 ? s.gapShift : 0, period: s.gapColors.length },
+    // Hidden or invisible motions don't constrain the loop either.
+    { key: 's2Speed', label: 'Spiral 2 speed', rate: s.s2Enabled ? s.s2Speed : 0, period: flowPeriod2(s) },
+    { key: 's2Shift', label: 'Spiral 2 colour shift', rate: s.s2Enabled && s.s2Colors.length > 1 ? s.s2Shift : 0, period: s.s2Colors.length },
+    { key: 'wobbleSpeed', label: 'Wobble speed', rate: s.wobble > 0 ? s.wobbleSpeed : 0, period: 1 },
   ];
   return all.filter((m) => Math.abs(m.rate) > 1e-9);
 }

@@ -48,6 +48,20 @@
     <Toggle size="small" checked={value as boolean} onchange={(e) => onchange(e.currentTarget.checked)}>
       {param.label}
     </Toggle>
+  {:else if param.type === 'color'}
+    <div class="flex items-center justify-between">
+      <Label for={id} class="text-sm">{param.label}</Label>
+      <div class="flex items-center gap-2">
+        <span class="font-mono text-xs text-gray-400 uppercase">{value}</span>
+        <input
+          {id}
+          type="color"
+          class="h-8 w-8 cursor-pointer rounded border border-gray-600 bg-transparent p-0.5"
+          value={value as string}
+          oninput={(e) => onchange(e.currentTarget.value)}
+        />
+      </div>
+    </div>
   {:else if param.type === 'palette'}
     {@const colors = value as string[]}
     <Label class="text-sm">{param.label}</Label>

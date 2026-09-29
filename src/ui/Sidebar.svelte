@@ -20,6 +20,11 @@
   const params = schema as readonly Param[];
   const byGroup = Object.fromEntries(groups.map((g) => [g, params.filter((p) => p.group === g)]));
 
+  // Compact underline tabs so all six fit the drawer; the bar scrolls sideways if not.
+  const tabBase = 'whitespace-nowrap border-b-2 bg-transparent px-2 py-3 text-sm';
+  const activeTab = `${tabBase} border-primary-500 text-primary-500`;
+  const inactiveTab = `${tabBase} border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-200`;
+
   function set(key: string, v: unknown) {
     (settings as Record<string, unknown>)[key] = v;
   }
@@ -31,7 +36,7 @@
   modal={false}
   outsideclose={false}
   dismissable={false}
-  class="flex w-96 max-w-[calc(100vw-2rem)] flex-col overflow-hidden bg-gray-900/95 p-4 pe-2 backdrop-blur"
+  class="flex w-[25rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden bg-gray-900/95 p-4 pe-2 backdrop-blur"
   aria-label="Customization"
 >
   <!-- Header, tab bar and footer stay put; only the tab content scrolls. -->
@@ -42,11 +47,11 @@
 
   <Tabs
     tabStyle="underline"
-    ulClass="shrink-0 me-2"
+    ulClass="settings-scroll me-2 flex shrink-0 space-x-0 overflow-x-auto"
     contentClass="settings-scroll mt-0 min-h-0 flex-1 overflow-y-auto rounded-none bg-transparent py-4 ps-0 pe-3"
   >
     {#each groups as group, gi (group)}
-      <TabItem open={gi === 0} title={group}>
+      <TabItem open={gi === 0} title={group} activeClass={activeTab} inactiveClass={inactiveTab}>
         <div class="space-y-5">
           {#each byGroup[group] as p, i (p.key)}
             {#if p.section && p.section !== byGroup[group][i - 1]?.section}
@@ -61,7 +66,7 @@
         </div>
       </TabItem>
     {/each}
-    <TabItem title="Record">
+    <TabItem title="Record" activeClass={activeTab} inactiveClass={inactiveTab}>
       {@render record()}
     </TabItem>
   </Tabs>

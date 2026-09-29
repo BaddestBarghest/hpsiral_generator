@@ -65,8 +65,9 @@ describe('schema', () => {
     for (const p of schema as readonly Param[]) {
       for (const [key, allowed] of Object.entries(p.showIf ?? {})) {
         const target = (schema as readonly Param[]).find((q) => q.key === key);
-        expect(target?.type).toBe('select');
-        const values = target?.type === 'select' ? target.options.map((o) => o.value) : [];
+        expect(['select', 'toggle']).toContain(target?.type);
+        const values =
+          target?.type === 'select' ? target.options.map((o) => o.value) : target?.type === 'toggle' ? ['true', 'false'] : [];
         for (const v of allowed) expect(values).toContain(v);
       }
     }

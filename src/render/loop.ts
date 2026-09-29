@@ -74,7 +74,7 @@ export class RenderLoop {
     if (dt === null) return;
     if (this.playing) this.tl = step(this.tl, this.settings, dt);
     if (this.playing || this.dirty) {
-      this.renderer.draw(this.settings, this.tl);
+      this.renderer.draw(this.settings, this.tl, this.playing ? dt : 0);
       this.dirty = false;
       this.countFrame(now);
     }

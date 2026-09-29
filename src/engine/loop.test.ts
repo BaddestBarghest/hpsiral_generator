@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaults, type Settings } from '../settings/schema';
-import { exactLoop, flowPeriod, planLoop } from './loop';
+import { exactLoop, flowPeriod, flowPeriod2, planLoop } from './loop';
 import { initialTimeline, step } from './timeline';
 
 /** Distance from `x` to the nearest multiple of `period`. */
@@ -19,6 +19,11 @@ function assertSeamless(s: Settings, target: number, fps: number, mode: 'exact' 
   expect(offGrid(tl.huePhase, 1)).toBeLessThan(1e-6);
   if (s.armColors.length > 1) expect(offGrid(tl.armColorPhase, s.armColors.length)).toBeLessThan(1e-6);
   if (s.gapColors.length > 1) expect(offGrid(tl.gapColorPhase, s.gapColors.length)).toBeLessThan(1e-6);
+  if (s.s2Enabled) {
+    expect(offGrid(tl.flowPhase2, flowPeriod2(plan.settings))).toBeLessThan(1e-6);
+    if (s.s2Colors.length > 1) expect(offGrid(tl.s2ColorPhase, s.s2Colors.length)).toBeLessThan(1e-6);
+  }
+  if (s.wobble > 0) expect(offGrid(tl.wobblePhase, 1)).toBeLessThan(1e-6);
   return plan;
 }
 
@@ -98,6 +103,25 @@ describe('planLoop', () => {
       const plan = assertSeamless(s, 5, fps);
       expect(plan.changes.length).toBeGreaterThan(0);
     }
+  });
+
+  it('includes the second spiral and wobble in the loop', () => {
+    const s: Settings = {
+      ...defaults(),
+      s2Enabled: true,
+      s2Speed: 0.3,
+      s2Arms: 3,
+      s2Colors: ['#ffffff', '#ff0000'],
+      s2ColorMode: 'static',
+      s2Shift: 0.2,
+      wobble: 0.4,
+      wobbleSpeed: 0.7,
+    };
+    expect(flowPeriod2(s)).toBe(3);
+    assertSeamless(s, 4, 30, 'short');
+    assertSeamless({ ...s, s2Speed: 0.25, wobbleSpeed: 0.5, s2Shift: 0.5 }, 1, 30, 'exact');
+    // Invisible motions are ignored: a disabled second spiral doesn't lengthen the loop.
+    expect(exactLoop({ ...s, s2Enabled: false, wobble: 0 }, 30)?.seconds).toBeCloseTo(2);
   });
 
   it('uses the other motions when the flow is still', () => {

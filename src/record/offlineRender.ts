@@ -10,10 +10,11 @@ import {
   WebMOutputFormat,
   type Target,
 } from 'mediabunny';
-import { initialTimeline, step } from '../engine/timeline';
+import { step } from '../engine/timeline';
 import { Renderer } from '../render/Renderer';
 import { frameCount, type RenderJob, type VideoCodec } from './renderJob';
 import { RenderCancelled } from './renderErrors';
+import { warmUp } from './warmup';
 
 /** Which codecs this browser can encode at the given size/rate. */
 export async function supportedCodecs(width: number, height: number, fps: number, bitrate: number): Promise<VideoCodec[]> {
@@ -61,11 +62,11 @@ export async function renderOffline(
   const dt = 1 / job.fps;
   try {
     await output.start();
-    let tl = initialTimeline();
+    let tl = warmUp(renderer, job.settings, job.fps);
     let lastReport = 0;
     for (let i = 0; i < total; i++) {
       if (signal.aborted) throw new RenderCancelled();
-      renderer.draw(job.settings, tl);
+      renderer.draw(job.settings, tl, dt);
       await source.add(i * dt, dt); // captures the canvas synchronously, then waits for encoder backpressure
       tl = step(tl, job.settings, dt);
       const now = performance.now();

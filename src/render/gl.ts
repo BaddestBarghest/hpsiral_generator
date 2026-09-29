@@ -33,6 +33,36 @@ function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLSh
   return sh;
 }
 
+/** An RGBA8 texture with a framebuffer, sized to the canvas, for multi-pass rendering. */
+export interface RenderTarget {
+  texture: WebGLTexture;
+  framebuffer: WebGLFramebuffer;
+  width: number;
+  height: number;
+}
+
+export function createTarget(gl: WebGL2RenderingContext, width: number, height: number): RenderTarget {
+  const texture = gl.createTexture()!;
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, width, height);
+  // Same size as the screen, so no filtering is ever needed.
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const framebuffer = gl.createFramebuffer()!;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { texture, framebuffer, width, height };
+}
+
+export function deleteTarget(gl: WebGL2RenderingContext, t: RenderTarget | null): void {
+  if (!t) return;
+  gl.deleteFramebuffer(t.framebuffer);
+  gl.deleteTexture(t.texture);
+}
+
 export interface Program {
   program: WebGLProgram;
   loc(name: string): WebGLUniformLocation | null;

@@ -4,6 +4,7 @@ import { initialTimeline, step } from '../engine/timeline';
 import { Renderer } from '../render/Renderer';
 import { frameCount, type RenderJob } from './renderJob';
 import { RenderCancelled } from './renderErrors';
+import { warmUp } from './warmup';
 
 const PALETTE_SAMPLES = 8;
 /** Every Nth pixel of each sample frame feeds the palette; plenty for 256 colours. */
@@ -34,11 +35,11 @@ export async function renderGif(
     // avoids edge flicker between frames and keeps the file smaller.
     const sharedPalette = colorsAnimate(job) ? null : buildPalette(renderer, pixels, job, total);
     const gif = GIFEncoder();
-    let tl = initialTimeline();
+    let tl = warmUp(renderer, settings, job.fps);
     let lastReport = 0;
     for (let i = 0; i < total; i++) {
       if (signal.aborted) throw new RenderCancelled();
-      renderer.draw(settings, tl);
+      renderer.draw(settings, tl, dt);
       renderer.readPixels(pixels);
       const palette = sharedPalette ?? quantize(pixels, 256);
       const index = applyPalette(pixels, palette);
@@ -77,10 +78,14 @@ export async function renderGif(
   }
 }
 
-/** Whether any colour changes over time (hue roll, or shifting through several colours). */
+/** Whether colours change over time (hue roll, trails, or shifting through several colours). */
 function colorsAnimate({ settings: s }: RenderJob): boolean {
   return (
-    s.hueRoll !== 0 || (s.armColors.length > 1 && s.armShift !== 0) || (s.gapColors.length > 1 && s.gapShift !== 0)
+    s.hueRoll !== 0 ||
+    s.trails > 0 || // blended echoes create colours no sample frame contains
+    (s.armColors.length > 1 && s.armShift !== 0) ||
+    (s.gapColors.length > 1 && s.gapShift !== 0) ||
+    (s.s2Enabled && s.s2Colors.length > 1 && s.s2Shift !== 0)
   );
 }
 

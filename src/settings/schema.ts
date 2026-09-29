@@ -1,7 +1,7 @@
 // Single source of truth for every user-facing parameter.
 // The UI, persistence/validation and renderer uniforms are all driven from this table.
 
-export type Group = 'Spiral' | 'Colour' | 'Display';
+export type Group = 'Spiral' | 'Colour' | 'Spiral 2' | 'Effects' | 'Display';
 
 interface Base<K extends string> {
   key: K;
@@ -43,10 +43,27 @@ export interface PaletteParam<K extends string = string> extends Base<K> {
   default: readonly string[];
 }
 
-export type Param = RangeParam | SelectParam | ToggleParam | PaletteParam;
+export interface ColorParam<K extends string = string> extends Base<K> {
+  type: 'color';
+  default: string;
+}
+
+export type Param = RangeParam | SelectParam | ToggleParam | PaletteParam | ColorParam;
 
 /** Colours per band (arms or gaps). */
 export const MAX_BAND_COLORS = 3;
+
+const PATTERNS = [
+  { value: 'archimedean', label: 'Archimedean spiral' },
+  { value: 'logarithmic', label: 'Logarithmic spiral' },
+  { value: 'power', label: 'Power-law spiral' },
+  { value: 'concentric', label: 'Concentric circles' },
+] as const;
+
+const DIRECTIONS = [
+  { value: 'inward', label: 'Inward' },
+  { value: 'outward', label: 'Outward' },
+] as const;
 
 const COLOR_MODES = [
   { value: 'static', label: 'Static (one colour per stripe)' },
@@ -57,15 +74,15 @@ const COLOR_MODES = [
 
 export const schema = [
   // ── Spiral ────────────────────────────────────────────────────────────
+  { key: 'mode', label: 'Pattern', group: 'Spiral', type: 'select', default: 'power', options: PATTERNS },
   {
-    key: 'mode', label: 'Pattern', group: 'Spiral', type: 'select', default: 'power',
+    key: 'shape', label: 'Shape', group: 'Spiral', type: 'select', default: 'round', help: 'Applies to both spirals.',
     options: [
-      { value: 'archimedean', label: 'Archimedean spiral' },
-      { value: 'logarithmic', label: 'Logarithmic spiral' },
-      { value: 'power', label: 'Power-law spiral' },
-      { value: 'concentric', label: 'Concentric circles' },
+      { value: 'round', label: 'Round' },
+      { value: 'polygon', label: 'Polygon' },
     ],
   },
+  { key: 'sides', label: 'Sides', group: 'Spiral', type: 'range', min: 3, max: 12, step: 1, default: 6, showIf: { shape: ['polygon'] } },
   { key: 'arms', label: 'Arms', group: 'Spiral', type: 'range', min: 1, max: 16, step: 1, default: 2, showIf: { mode: SPIRAL_MODES } },
   { key: 'density', label: 'Density', group: 'Spiral', type: 'range', min: 0.5, max: 30, step: 0.1, default: 10 },
   { key: 'exponent', label: 'Power-law exponent', group: 'Spiral', type: 'range', min: 0.2, max: 1.5, step: 0.01, default: 0.4, help: 'Lower = tighter centre; 1 = Archimedean.', showIf: { mode: ['power'] } },
@@ -75,13 +92,7 @@ export const schema = [
   { key: 'softness', label: 'Edge softness', group: 'Spiral', type: 'range', min: 0, max: 1, step: 0.01, default: 0 },
   { key: 'zoom', label: 'Zoom', group: 'Spiral', type: 'range', min: 0.25, max: 4, step: 0.01, default: 1 },
   { key: 'speed', label: 'Speed', group: 'Spiral', type: 'range', min: 0, max: 4, step: 0.01, default: 0.5, unit: 'cycles/s' },
-  {
-    key: 'direction', label: 'Direction', group: 'Spiral', type: 'select', default: 'inward',
-    options: [
-      { value: 'inward', label: 'Inward' },
-      { value: 'outward', label: 'Outward' },
-    ],
-  },
+  { key: 'direction', label: 'Direction', group: 'Spiral', type: 'select', default: 'inward', options: DIRECTIONS },
   { key: 'mirror', label: 'Mirror (reverse twist)', group: 'Spiral', type: 'toggle', default: false, showIf: { mode: SPIRAL_MODES } },
 
   // ── Colour ────────────────────────────────────────────────────────────
@@ -94,6 +105,46 @@ export const schema = [
   { key: 'gapColorMode', label: 'Colour mode', group: 'Colour', section: 'Gaps', type: 'select', default: 'static', options: COLOR_MODES },
   { key: 'gapShift', label: 'Colour shift speed', group: 'Colour', section: 'Gaps', type: 'range', min: 0, max: 2, step: 0.01, default: 0, unit: 'cycles/s' },
   { key: 'hueRoll', label: 'Hue roll speed', group: 'Colour', section: 'Effects', type: 'range', min: 0, max: 1, step: 0.005, default: 0, unit: 'rev/s', help: 'Rotates the hue of every colour.' },
+
+  // ── Spiral 2 ──────────────────────────────────────────────────────────
+  // A second pattern drawn over the first: arms only (its gaps are see-through).
+  // Shares zoom, shape, exponent, centre spread/taper, softness, twist and wobble.
+  { key: 's2Enabled', label: 'Show second spiral', group: 'Spiral 2', type: 'toggle', default: false },
+  { key: 's2Mode', label: 'Pattern', group: 'Spiral 2', type: 'select', default: 'archimedean', options: PATTERNS, showIf: { s2Enabled: ['true'] } },
+  { key: 's2Arms', label: 'Arms', group: 'Spiral 2', type: 'range', min: 1, max: 16, step: 1, default: 1, showIf: { s2Enabled: ['true'], s2Mode: SPIRAL_MODES } },
+  { key: 's2Density', label: 'Density', group: 'Spiral 2', type: 'range', min: 0.5, max: 30, step: 0.1, default: 4, showIf: { s2Enabled: ['true'] } },
+  { key: 's2Width', label: 'Arm width', group: 'Spiral 2', type: 'range', min: 0.05, max: 0.95, step: 0.01, default: 0.2, showIf: { s2Enabled: ['true'] } },
+  { key: 's2Speed', label: 'Speed', group: 'Spiral 2', type: 'range', min: 0, max: 4, step: 0.01, default: 0.3, unit: 'cycles/s', showIf: { s2Enabled: ['true'] } },
+  { key: 's2Direction', label: 'Direction', group: 'Spiral 2', type: 'select', default: 'outward', options: DIRECTIONS, showIf: { s2Enabled: ['true'] } },
+  { key: 's2Mirror', label: 'Mirror (reverse twist)', group: 'Spiral 2', type: 'toggle', default: true, showIf: { s2Enabled: ['true'], s2Mode: SPIRAL_MODES } },
+  { key: 's2Colors', label: 'Colours', group: 'Spiral 2', section: 'Colour & blending', type: 'palette', minColors: 1, maxColors: MAX_BAND_COLORS, default: ['#f5cb5c'], showIf: { s2Enabled: ['true'] } },
+  { key: 's2ColorMode', label: 'Colour mode', group: 'Spiral 2', section: 'Colour & blending', type: 'select', default: 'static', options: COLOR_MODES, showIf: { s2Enabled: ['true'] } },
+  { key: 's2Shift', label: 'Colour shift speed', group: 'Spiral 2', section: 'Colour & blending', type: 'range', min: 0, max: 2, step: 0.01, default: 0, unit: 'cycles/s', showIf: { s2Enabled: ['true'] } },
+  { key: 's2Opacity', label: 'Opacity', group: 'Spiral 2', section: 'Colour & blending', type: 'range', min: 0, max: 1, step: 0.01, default: 0.8, showIf: { s2Enabled: ['true'] } },
+  {
+    key: 's2Blend', label: 'Blend mode', group: 'Spiral 2', section: 'Colour & blending', type: 'select', default: 'normal', showIf: { s2Enabled: ['true'] },
+    options: [
+      { value: 'normal', label: 'Normal' },
+      { value: 'add', label: 'Add (lighten)' },
+      { value: 'multiply', label: 'Multiply (darken)' },
+      { value: 'screen', label: 'Screen' },
+      { value: 'difference', label: 'Difference (invert)' },
+    ],
+  },
+
+  // ── Effects ───────────────────────────────────────────────────────────
+  { key: 'twist', label: 'Twist', group: 'Effects', section: 'Motion', type: 'range', min: -3, max: 3, step: 0.01, default: 0, unit: 'turns', help: 'Bends the arms more the further out they are.' },
+  { key: 'wobble', label: 'Wobble', group: 'Effects', section: 'Motion', type: 'range', min: 0, max: 1, step: 0.01, default: 0, help: 'Ripples the arms sideways.' },
+  { key: 'wobbleFreq', label: 'Wobble ripples', group: 'Effects', section: 'Motion', type: 'range', min: 0.5, max: 12, step: 0.1, default: 3 },
+  { key: 'wobbleSpeed', label: 'Wobble speed', group: 'Effects', section: 'Motion', type: 'range', min: 0, max: 3, step: 0.01, default: 0.5, unit: 'cycles/s' },
+  { key: 'trails', label: 'Afterimage trails', group: 'Effects', section: 'Afterimage', type: 'range', min: 0, max: 0.95, step: 0.01, default: 0, help: 'Leaves fading echoes of previous frames.' },
+  { key: 'vignette', label: 'Strength', group: 'Effects', section: 'Vignette', type: 'range', min: 0, max: 1, step: 0.01, default: 0 },
+  { key: 'vignetteSize', label: 'Size', group: 'Effects', section: 'Vignette', type: 'range', min: 0.2, max: 1.6, step: 0.01, default: 0.9 },
+  { key: 'vignetteColor', label: 'Colour', group: 'Effects', section: 'Vignette', type: 'color', default: '#000000' },
+  { key: 'dotEnabled', label: 'Show centre dot', group: 'Effects', section: 'Centre dot', type: 'toggle', default: false },
+  { key: 'dotSize', label: 'Size', group: 'Effects', section: 'Centre dot', type: 'range', min: 0.005, max: 0.3, step: 0.005, default: 0.04, showIf: { dotEnabled: ['true'] } },
+  { key: 'dotSoftness', label: 'Softness', group: 'Effects', section: 'Centre dot', type: 'range', min: 0, max: 1, step: 0.01, default: 0.1, showIf: { dotEnabled: ['true'] } },
+  { key: 'dotColor', label: 'Colour', group: 'Effects', section: 'Centre dot', type: 'color', default: '#f5cb5c', showIf: { dotEnabled: ['true'] } },
 
   // ── Display ───────────────────────────────────────────────────────────
   { key: 'renderScale', label: 'Render scale', group: 'Display', type: 'range', min: 0.25, max: 1, step: 0.05, default: 1 },
@@ -114,13 +165,14 @@ type Entry = Schema[number];
 type ValueOf<P> = P extends { type: 'range' } ? number
   : P extends { type: 'toggle' } ? boolean
   : P extends { type: 'palette' } ? string[]
+  : P extends { type: 'color' } ? string
   : P extends { type: 'select'; options: readonly { value: infer V }[] } ? V
   : never;
 
 export type Settings = { -readonly [P in Entry as P['key']]: ValueOf<P> };
 export type SettingKey = keyof Settings;
 
-export const groups: Group[] = ['Spiral', 'Colour', 'Display'];
+export const groups: Group[] = ['Spiral', 'Colour', 'Spiral 2', 'Effects', 'Display'];
 
 export function defaults(): Settings {
   const out: Record<string, unknown> = {};
@@ -174,6 +226,9 @@ export function sanitize(input: unknown): Settings {
           const colors = v.filter((c): c is string => typeof c === 'string' && HEX.test(c)).slice(0, p.maxColors);
           if (colors.length >= p.minColors) out[p.key] = colors.map((c) => c.toLowerCase());
         }
+        break;
+      case 'color':
+        if (typeof v === 'string' && HEX.test(v)) out[p.key] = v.toLowerCase();
         break;
     }
   }

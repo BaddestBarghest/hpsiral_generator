@@ -19,27 +19,46 @@ export interface TimelineState {
   time: number;
   /** Pattern flow phase in cycles, wrapped to [0, FLOW_PERIOD). */
   flowPhase: number;
+  /** Second spiral's flow phase, same wrapping. */
+  flowPhase2: number;
   /** Hue rotation in revolutions, wrapped to [0, 1). */
   huePhase: number;
   /** Arm colour shift in palette steps, wrapped to [0, COLOR_PERIOD). */
   armColorPhase: number;
   /** Gap colour shift in palette steps, wrapped to [0, COLOR_PERIOD). */
   gapColorPhase: number;
+  /** Second spiral's colour shift, wrapped to [0, COLOR_PERIOD). */
+  s2ColorPhase: number;
+  /** Wobble ripple travel in cycles, wrapped to [0, 1). */
+  wobblePhase: number;
 }
 
 export function initialTimeline(): TimelineState {
-  return { time: 0, flowPhase: 0, huePhase: 0, armColorPhase: 0, gapColorPhase: 0 };
+  return {
+    time: 0,
+    flowPhase: 0,
+    flowPhase2: 0,
+    huePhase: 0,
+    armColorPhase: 0,
+    gapColorPhase: 0,
+    s2ColorPhase: 0,
+    wobblePhase: 0,
+  };
 }
 
 const wrap = (x: number, period: number) => x - Math.floor(x / period) * period;
 
 export function step(state: TimelineState, s: Settings, dt: number): TimelineState {
   const dir = s.direction === 'inward' ? 1 : -1;
+  const dir2 = s.s2Direction === 'inward' ? 1 : -1;
   return {
     time: state.time + dt,
     flowPhase: wrap(state.flowPhase + s.speed * dir * dt, FLOW_PERIOD),
+    flowPhase2: wrap(state.flowPhase2 + s.s2Speed * dir2 * dt, FLOW_PERIOD),
     huePhase: wrap(state.huePhase + s.hueRoll * dt, 1),
     armColorPhase: wrap(state.armColorPhase + s.armShift * dt, COLOR_PERIOD),
     gapColorPhase: wrap(state.gapColorPhase + s.gapShift * dt, COLOR_PERIOD),
+    s2ColorPhase: wrap(state.s2ColorPhase + s.s2Shift * dt, COLOR_PERIOD),
+    wobblePhase: wrap(state.wobblePhase + s.wobbleSpeed * dt, 1),
   };
 }
