@@ -37,7 +37,7 @@
   modal={false}
   outsideclose={false}
   dismissable={false}
-  class="flex w-[25rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden bg-gray-900/95 p-4 pe-2 backdrop-blur"
+  class="flex w-[25rem] max-w-[calc(100vw-2rem)] flex-col overflow-clip bg-gray-900/95 p-4 pe-2 backdrop-blur"
   aria-label="Customization"
 >
   <!-- Header, tab bar and footer stay put; only the tab content scrolls. -->
@@ -49,7 +49,7 @@
   <Tabs
     tabStyle="underline"
     ulClass="settings-scroll me-2 flex shrink-0 space-x-0 overflow-x-auto"
-    contentClass="settings-scroll mt-0 min-h-0 flex-1 overflow-y-auto rounded-none bg-transparent py-4 ps-0 pe-3"
+    contentClass="settings-scroll relative mt-0 min-h-0 flex-1 overflow-y-auto rounded-none bg-transparent py-4 ps-0 pe-3"
   >
     {#each groups as group, gi (group)}
       <TabItem open={gi === 0} title={group} activeClass={activeTab} inactiveClass={inactiveTab}>
