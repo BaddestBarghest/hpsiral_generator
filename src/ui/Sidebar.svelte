@@ -9,7 +9,7 @@
   import { fly } from 'svelte/transition';
   import { dur, MEDIUM } from './motion';
   import { Button, TabItem, Tabs } from 'flowbite-svelte';
-  import { ChevronLeftOutline, ChevronRightOutline, UndoOutline } from 'flowbite-svelte-icons';
+  import { ChevronLeftOutline, ChevronRightOutline, FloppyDiskOutline, FolderOpenOutline, UndoOutline } from 'flowbite-svelte-icons';
   import { groups, isVisible, schema, type Param, type Settings } from '../settings/schema';
   import Control from './Control.svelte';
   import PanelDrawer from './PanelDrawer.svelte';
@@ -23,12 +23,18 @@
     width = $bindable(400),
     settings,
     onreset,
+    onsave,
+    onload,
     onbeat,
   }: {
     open: boolean;
     width?: number;
     settings: Settings;
     onreset: () => void;
+    /** Save the settings to a file. */
+    onsave: () => void;
+    /** Load settings from a file the user picked. */
+    onload: (file: File) => void;
     /** Tap tempo marked a beat. */
     onbeat: () => void;
   } = $props();
@@ -125,6 +131,13 @@
     );
   });
 
+  let fileInput = $state<HTMLInputElement>();
+  function picked() {
+    const file = fileInput?.files?.[0];
+    if (file) onload(file);
+    if (fileInput) fileInput.value = ''; // so picking the same file again still loads it
+  }
+
   function set(key: string, v: unknown) {
     const extra = autoShiftFor(key, v, settings);
     (settings as Record<string, unknown>)[key] = v;
@@ -203,8 +216,17 @@
   </div>
 
   {#snippet footer()}
-    <Button size="xs" color="alternative" onclick={onreset}>
-      <UndoOutline class="me-1.5 h-3.5 w-3.5" /> Reset to defaults
-    </Button>
+    <div class="flex flex-wrap gap-2">
+      <Button size="xs" color="alternative" onclick={onsave} title="Save these settings to a file">
+        <FloppyDiskOutline class="me-1.5 h-3.5 w-3.5" /> Save
+      </Button>
+      <Button size="xs" color="alternative" onclick={() => fileInput?.click()} title="Load settings from a saved file">
+        <FolderOpenOutline class="me-1.5 h-3.5 w-3.5" /> Load
+      </Button>
+      <Button size="xs" color="alternative" class="ms-auto" onclick={onreset}>
+        <UndoOutline class="me-1.5 h-3.5 w-3.5" /> Reset to defaults
+      </Button>
+    </div>
+    <input bind:this={fileInput} type="file" accept=".json,application/json" class="hidden" onchange={picked} />
   {/snippet}
 </PanelDrawer>

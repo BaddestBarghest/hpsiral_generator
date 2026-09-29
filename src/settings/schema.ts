@@ -360,6 +360,26 @@ export function withVersion(s: Settings): Settings & { version: number } {
   return { ...s, version: SETTINGS_VERSION };
 }
 
+/** Settings as saved (in a file, or in the browser), with their version. */
+export function settingsToJson(s: Settings): string {
+  return JSON.stringify(withVersion(s), null, 2);
+}
+
+/** Reads saved settings (older versions included); throws a readable Error when the text isn't settings. */
+export function settingsFromJson(text: string): Settings {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    throw new Error("That file isn't a settings file (it isn't valid JSON).");
+  }
+  const obj = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
+  if (!obj || !(schema as readonly Param[]).some((p) => p.key in obj)) {
+    throw new Error("That file doesn't contain any HypnoGenerator settings.");
+  }
+  return sanitize(migrate(obj));
+}
+
 /** Carries settings saved by older versions forward; run before `sanitize`. */
 export function migrate(input: unknown): unknown {
   if (!input || typeof input !== 'object') return input;

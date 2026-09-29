@@ -1,14 +1,14 @@
-import { defaults, migrate, sanitize, withVersion, type Settings } from './schema';
+import { defaults, settingsFromJson, settingsToJson, type Settings } from './schema';
 import { readStored, writeStored } from '../storage';
 
 const KEY = 'hypnogen:settings:v1';
 
 function load(): Settings {
+  const raw = readStored(KEY);
   try {
-    const raw = readStored(KEY);
-    return raw ? sanitize(migrate(JSON.parse(raw))) : defaults();
+    return raw ? settingsFromJson(raw) : defaults();
   } catch {
-    return defaults(); // corrupt JSON
+    return defaults(); // corrupt save
   }
 }
 
@@ -19,9 +19,14 @@ let saveTimer: ReturnType<typeof setTimeout> | undefined;
 /** Debounced write to localStorage; failures (private mode, quota) are ignored. */
 export function persistSettings(snapshot: Settings): void {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => writeStored(KEY, JSON.stringify(withVersion(snapshot))), 300);
+  saveTimer = setTimeout(() => writeStored(KEY, settingsToJson(snapshot)), 300);
 }
 
 export function resetSettings(): void {
   Object.assign(settings, defaults());
+}
+
+/** Replaces every setting with those in a saved settings file; throws if it isn't one. */
+export function loadSettingsFile(text: string): void {
+  Object.assign(settings, settingsFromJson(text));
 }

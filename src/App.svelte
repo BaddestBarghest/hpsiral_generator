@@ -14,7 +14,8 @@
     StopSolid,
     VideoCameraSolid,
   } from 'flowbite-svelte-icons';
-  import { settings, persistSettings, resetSettings } from './settings/store.svelte';
+  import { settings, persistSettings, resetSettings, loadSettingsFile } from './settings/store.svelte';
+  import { settingsToJson } from './settings/schema';
   import { readStored, writeStored } from './storage';
   import { initCustomFont } from './ui/customFont.svelte';
   import { createRenderHost, type RenderHost } from './render/host';
@@ -73,6 +74,20 @@
     const id = setTimeout(() => (error = null), ERROR_MS);
     return () => clearTimeout(id);
   });
+
+  // ── Settings files ──
+  function saveSettings() {
+    saveBlob(new Blob([settingsToJson($state.snapshot(settings))], { type: 'application/json' }), timestampedName('hypnogen-settings', 'json'));
+  }
+
+  async function loadSettings(file: File) {
+    try {
+      loadSettingsFile(await file.text());
+      notice = `Loaded settings from ${file.name}.`;
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    }
+  }
 
   interface RenderState {
     frame: number;
@@ -367,7 +382,7 @@
     </Button>
   </div>
 
-  <Sidebar bind:open={drawerOpen} bind:width={drawerWidth} {settings} onreset={resetSettings} onbeat={() => host?.alignBeat()} />
+  <Sidebar bind:open={drawerOpen} bind:width={drawerWidth} {settings} onreset={resetSettings} onsave={saveSettings} onload={loadSettings} onbeat={() => host?.alignBeat()} />
   <!-- Loaded the first time it's opened (render/record settings, loop planner). -->
   {#if exportUsed}
     {#await import('./ui/ExportPanel.svelte') then { default: ExportPanel }}

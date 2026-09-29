@@ -1,5 +1,40 @@
 import { describe, expect, it } from 'vitest';
-import { defaults, fromSlider, groups, isVisible, migrate, sanitize, schema, SLIDER_RESOLUTION, toSlider, type Param, type RangeParam } from './schema';
+import {
+  defaults,
+  fromSlider,
+  groups,
+  isVisible,
+  migrate,
+  sanitize,
+  schema,
+  settingsFromJson,
+  settingsToJson,
+  SLIDER_RESOLUTION,
+  toSlider,
+  type Param,
+  type RangeParam,
+} from './schema';
+
+describe('settings files', () => {
+  it('round-trips settings and stamps the version', () => {
+    const s = { ...defaults(), arms: 5, mode: 'globe' as const, armColors: ['#ff00ff'] };
+    const text = settingsToJson(s);
+    expect(JSON.parse(text).version).toBeGreaterThanOrEqual(2);
+    expect(settingsFromJson(text)).toEqual(s);
+  });
+
+  it('fills in settings the file lacks and clamps bad values', () => {
+    const s = settingsFromJson(JSON.stringify({ arms: 999 }));
+    expect(s.arms).toBe((schema.find((p) => p.key === 'arms') as RangeParam).max);
+    expect(s.density).toBe(defaults().density);
+  });
+
+  it('rejects files that are not settings', () => {
+    expect(() => settingsFromJson('not json')).toThrow(/valid JSON/);
+    expect(() => settingsFromJson('[1, 2]')).toThrow(/any HypnoGenerator settings/);
+    expect(() => settingsFromJson('{"name": "something else"}')).toThrow(/any HypnoGenerator settings/);
+  });
+});
 
 describe('schema', () => {
   it('has unique keys', () => {
