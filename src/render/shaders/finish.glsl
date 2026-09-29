@@ -6,6 +6,15 @@
 // runtime branch: some drivers (e.g. SwiftShader, Chrome's software fallback) pay for a
 // texture read in a branch even when it's never taken.
 
+#ifndef GLOW
+#define GLOW 0
+#endif
+#if GLOW
+uniform sampler2D uBloom;     // the blurred image, at reduced resolution
+uniform float uGlow;          // 0..2 strength
+uniform vec3 uGlowColor;      // tint (white = the stripes' own colours)
+#endif
+
 uniform float uVignette;      // 0..1 strength
 uniform float uVignetteSize;  // radius where the vignette is halfway (short screen half = 1)
 uniform vec3 uVignetteColor;
@@ -34,6 +43,12 @@ vec4 placedText(vec2 frag) {
 }
 
 vec3 finish(vec3 col) {
+#if GLOW
+  // Screen blend: light spills over dark areas without blowing out the bright ones.
+  vec3 bloom = textureLod(uBloom, gl_FragCoord.xy / uResolution, 0.0).rgb * uGlowColor;
+  col = 1.0 - (1.0 - col) * (1.0 - min(bloom * uGlow, 1.0));
+#endif
+
   if (uVignette > 0.0) {
     float minRes = min(uResolution.x, uResolution.y);
     float d = length((gl_FragCoord.xy - 0.5 * uResolution) / (0.5 * minRes));

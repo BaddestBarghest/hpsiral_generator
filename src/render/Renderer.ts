@@ -19,10 +19,11 @@ import {
 import sceneSrc from './shaders/scene.frag.glsl?raw';
 import postSrc from './shaders/post.frag.glsl?raw';
 import finishSrc from './shaders/finish.glsl?raw';
+import blurSrc from './shaders/blur.frag.glsl?raw';
 
 // GLSL has no includes; splice the shared finishing code into both shaders.
 const withFinish = (src: string) => src.replace('#include "finish.glsl"', finishSrc);
-const SOURCES = { scene: withFinish(sceneSrc), post: withFinish(postSrc) };
+const SOURCES = { scene: withFinish(sceneSrc), post: withFinish(postSrc), blur: blurSrc };
 
 /**
  * Compile-time switches for a shader variant. Features that are off are left out of the
@@ -39,7 +40,12 @@ interface PostVariant {
   /** 0 spiral afterimage, 1 final output, 2 text afterimage. */
   PASS: 0 | 1 | 2;
   TEXT_MODE: TextMode;
+  /** Final pass: add the glow. */
+  GLOW: 0 | 1;
 }
+
+/** The glow is blurred at this fraction of the screen resolution (it's soft anyway). */
+const GLOW_SCALE = 0.25;
 
 /** Echoes fall below one 8-bit level after about this many half-lives. */
 const TRAIL_HALF_LIVES_TO_FADE = 8;
@@ -92,6 +98,8 @@ export class Renderer {
   private textHistoryValid = false;
   /** Seconds since text was last on screen; the text layer is dropped once its echoes fade. */
   private textHiddenFor = Infinity;
+  /** Reduced-resolution targets for the glow: downscaled image and blur ping-pong; [0] ends up blurred. */
+  private glowTargets: [RenderTarget | null, RenderTarget | null] = [null, null];
 
   /** `onNeedsRedraw`: something changed asynchronously (e.g. a font finished loading). */
   constructor(
@@ -117,6 +125,7 @@ export class Renderer {
     this.historyValid = false;
     this.textHistory = [null, null];
     this.textHistoryValid = false;
+    this.glowTargets = [null, null];
     this.initResources();
     this.lost = false;
   };
@@ -130,7 +139,8 @@ export class Renderer {
   /** The shader variant for these switches, compiled on first use. */
   private program(kind: 'scene', v: SceneVariant): Program;
   private program(kind: 'post', v: PostVariant): Program;
-  private program(kind: keyof typeof SOURCES, v: SceneVariant | PostVariant): Program {
+  private program(kind: 'blur', v: { DOWNSAMPLE: 0 | 1 }): Program;
+  private program(kind: keyof typeof SOURCES, v: SceneVariant | PostVariant | { DOWNSAMPLE: 0 | 1 }): Program {
     const key = kind + JSON.stringify(v);
     let prog = this.programs.get(key);
     if (!prog) {
@@ -162,6 +172,11 @@ export class Renderer {
     deleteTarget(gl, this.history[1]);
     deleteTarget(gl, this.textHistory[0]);
     deleteTarget(gl, this.textHistory[1]);
+    deleteTarget(gl, this.glowTargets[0]);
+    deleteTarget(gl, this.glowTargets[1]);
+    const gw = Math.max(1, Math.round(width * GLOW_SCALE));
+    const gh = Math.max(1, Math.round(height * GLOW_SCALE));
+    this.glowTargets = [createTarget(gl, gw, gh, true), createTarget(gl, gw, gh, true)];
     this.sceneTarget = createTarget(gl, width, height);
     this.history = [createTarget(gl, width, height), createTarget(gl, width, height)];
     this.historyValid = false;
@@ -188,13 +203,14 @@ export class Renderer {
     const textTrail =
       s.textEnabled && s.textTrails > 0 && this.textHiddenFor <= s.textTrails * TRAIL_HALF_LIVES_TO_FADE;
     const spiralTrail = s.trails > 0;
+    const glow = s.glow > 0;
 
     gl.viewport(0, 0, width, height);
     gl.bindVertexArray(this.vao);
     const S2 = s.s2Enabled ? 1 : 0;
 
-    if (!spiralTrail && !textTrail) {
-      // Nothing to keep between frames: one pass straight to the screen.
+    if (!spiralTrail && !textTrail && !glow) {
+      // Nothing to keep or blur: one pass straight to the screen.
       this.historyValid = false;
       this.textHistoryValid = false;
       if (!show) return;
@@ -215,7 +231,7 @@ export class Renderer {
     if (spiralTrail) {
       // Feedback: new afterimage = mix(scene, previous afterimage), written to the other buffer.
       const [prev, next] = this.history;
-      const p = this.program('post', { PASS: 0, TEXT_MODE: TEXT_MODE.none });
+      const p = this.program('post', { PASS: 0, TEXT_MODE: TEXT_MODE.none, GLOW: 0 });
       gl.bindFramebuffer(gl.FRAMEBUFFER, next!.framebuffer);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.sceneTarget!.texture);
@@ -238,7 +254,7 @@ export class Renderer {
     if (textTrail) {
       // Text layer: the current text over its own fading afterimage.
       const [prev, next] = this.textHistory;
-      const p = this.program('post', { PASS: 2, TEXT_MODE: TEXT_MODE.none });
+      const p = this.program('post', { PASS: 2, TEXT_MODE: TEXT_MODE.none, GLOW: 0 });
       gl.bindFramebuffer(gl.FRAMEBUFFER, next!.framebuffer);
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, prev!.texture);
@@ -258,14 +274,63 @@ export class Renderer {
 
     if (!show) return;
 
-    // Final: vignette, text, pulses and dither to the screen.
-    const p = this.program('post', { PASS: 1, TEXT_MODE: textMode });
+    if (glow) this.blurForGlow(present, s.glowSize * Math.min(width, height));
+
+    // Final: glow, vignette, text, pulses and dither to the screen.
+    const p = this.program('post', { PASS: 1, TEXT_MODE: textMode, GLOW: glow ? 1 : 0 });
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, width, height);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, present.texture);
     gl.uniform2f(p.loc('uResolution'), width, height);
     gl.uniform1i(p.loc('uSource'), 0);
+    if (glow) {
+      gl.activeTexture(gl.TEXTURE3);
+      gl.bindTexture(gl.TEXTURE_2D, this.glowTargets[0]!.texture);
+      gl.uniform1i(p.loc('uBloom'), 3);
+      gl.uniform1f(p.loc('uGlow'), s.glow);
+      gl.uniform3fv(p.loc('uGlowColor'), hexToRgb(s.glowColor));
+    }
     this.setFinish(p, s, pulse, text, textSource);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  /**
+   * Blurs `source` into glowTargets[0] at reduced resolution: average 4x4 blocks down into
+   * [0], blur horizontally into [1], then vertically back into [0]. `radius` is the spread
+   * in screen pixels.
+   */
+  private blurForGlow(source: RenderTarget, radius: number): void {
+    const gl = this.gl;
+    const [a, b] = this.glowTargets as [RenderTarget, RenderTarget];
+    gl.viewport(0, 0, a.width, a.height);
+    gl.activeTexture(gl.TEXTURE0);
+
+    let p = this.program('blur', { DOWNSAMPLE: 1 });
+    gl.uniform2f(p.loc('uResolution'), a.width, a.height);
+    gl.uniform1i(p.loc('uSource'), 0);
+    gl.uniform2f(p.loc('uStep'), 1 / source.width, 1 / source.height);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, a.framebuffer);
+    gl.bindTexture(gl.TEXTURE_2D, source.texture);
+    // Screen-sized targets are nearest-filtered; the bilinear taps need linear for this read.
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+    // 9 taps cover ±2 sigma; sigma = radius / 2, so taps are radius / 4 apart (in small-target texels).
+    const tap = (radius / 4) * GLOW_SCALE;
+    p = this.program('blur', { DOWNSAMPLE: 0 });
+    gl.uniform2f(p.loc('uResolution'), a.width, a.height);
+    gl.uniform1i(p.loc('uSource'), 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, b.framebuffer);
+    gl.bindTexture(gl.TEXTURE_2D, a.texture);
+    gl.uniform2f(p.loc('uStep'), tap / a.width, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, a.framebuffer);
+    gl.bindTexture(gl.TEXTURE_2D, b.texture);
+    gl.uniform2f(p.loc('uStep'), 0, tap / a.height);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 

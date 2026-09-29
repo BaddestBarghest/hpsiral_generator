@@ -58,7 +58,7 @@ export class TextLayer {
     }
     const wall = isWall(s);
     const layout = wall ? [s.textLayout, text.slot, s.textLayout === 'wallAlt' ? text.alt : '', s.textX, s.textY, s.textWallDensity] : [];
-    const key = JSON.stringify([ready, phrase, s.textFont, weight, s.textSize, s.textColor, s.textOutline, s.textOutlineColor, width, height, layout]);
+    const key = JSON.stringify([ready, phrase, s.textFont, weight, s.textSize, s.textColor, s.textOutline, s.textOutlineColor, s.textGlow, s.textGlowColor, width, height, layout]);
     if (key === this.key) return;
     this.key = key;
     this.prepare(s, width, height);
@@ -88,6 +88,15 @@ export class TextLayer {
 
   private drawText(s: Settings, text: string, x: number, y: number): void {
     const { ctx } = this;
+    if (s.textGlow > 0) {
+      // The glow is the shadow of a copy of the text; a second copy makes strong glows denser.
+      ctx.save();
+      ctx.shadowColor = s.textGlowColor;
+      ctx.shadowBlur = this.fontPx * (0.1 + 0.6 * s.textGlow);
+      ctx.fillStyle = s.textGlowColor;
+      for (let i = s.textGlow > 0.5 ? 2 : 1; i > 0; i--) ctx.fillText(text, x, y);
+      ctx.restore();
+    }
     if (s.textOutline > 0) {
       // The stroke is centred on the glyph edge, so double it for the visible outline.
       ctx.lineWidth = s.textOutline * this.fontPx * 2;
