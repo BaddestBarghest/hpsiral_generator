@@ -37,6 +37,7 @@
   {:else if param.type === 'select'}
     <Label for={id} class="text-sm">{param.label}</Label>
     <Select
+      placeholder=""
       {id}
       size="sm"
       items={param.options.map((o) => ({ name: o.label, value: o.value }))}

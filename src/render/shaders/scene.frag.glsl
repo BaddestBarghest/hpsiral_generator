@@ -140,5 +140,12 @@ void main() {
   col = mix(col, uAvgColor, smoothstep(0.6, 1.0, dv));
 
   if (uHueShift != 0.0) col = clamp(hueRotate(col, uHueShift), 0.0, 1.0);
+
+  // ±0.5 LSB dither (interleaved gradient noise) breaks up 8-bit banding in gradients,
+  // which video encoders would otherwise turn into visible steps. Static per pixel so it
+  // doesn't add frame-to-frame noise for the encoder.
+  float dither = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+  col += (dither - 0.5) / 255.0;
+
   outColor = vec4(col, 1.0);
 }

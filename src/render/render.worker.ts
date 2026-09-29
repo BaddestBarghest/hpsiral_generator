@@ -1,11 +1,13 @@
 /// <reference lib="webworker" />
 import { RenderLoop } from './loop';
-import type { FromRender, ToRender } from './protocol';
+import { RenderTask } from './renderTask';
+import type { Emit, ToRender } from './protocol';
 
 declare const self: DedicatedWorkerGlobalScope;
 
 let loop: RenderLoop | null = null;
-const emit = (msg: FromRender) => self.postMessage(msg);
+let task: RenderTask | null = null;
+const emit: Emit = (msg, transfer = []) => self.postMessage(msg, transfer);
 
 self.onmessage = (e: MessageEvent<ToRender>) => {
   const msg = e.data;
@@ -13,6 +15,7 @@ self.onmessage = (e: MessageEvent<ToRender>) => {
     switch (msg.type) {
       case 'init':
         loop = new RenderLoop(msg.canvas, msg.settings, msg.viewport, msg.playing, emit);
+        task = new RenderTask(loop, emit);
         emit({ type: 'ready' });
         break;
       case 'settings':
@@ -23,6 +26,12 @@ self.onmessage = (e: MessageEvent<ToRender>) => {
         break;
       case 'playing':
         loop?.setPlaying(msg.playing);
+        break;
+      case 'render':
+        void task?.start(msg.job, msg.fileHandle);
+        break;
+      case 'cancelRender':
+        task?.cancel();
         break;
     }
   } catch (err) {

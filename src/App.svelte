@@ -16,9 +16,12 @@
   import type { FromRender, Viewport } from './render/protocol';
   import { LiveRecorder, supportedFormats, type RecordPrefs } from './record/liveRecorder';
   import { saveBlob, timestampedName } from './record/save';
+  import { RENDER_FORMATS, type RenderRequest } from './record/renderJob';
   import Sidebar from './ui/Sidebar.svelte';
   import SafetyGate from './ui/SafetyGate.svelte';
   import RecordPanel from './ui/RecordPanel.svelte';
+  import RenderPanel from './ui/RenderPanel.svelte';
+  import RenderProgress from './ui/RenderProgress.svelte';
 
   const SAFETY_KEY = 'hypnogen:safety-ack:v1';
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -44,6 +47,17 @@
   let fps = $state(0);
   let renderMode = $state<'worker' | 'inline' | ''>('');
   let error = $state<string | null>(null);
+  let notice = $state<string | null>(null);
+
+  interface RenderState {
+    frame: number;
+    total: number;
+    startedAt: number;
+    fileName: string;
+    mimeType: string;
+    cancelling: boolean;
+  }
+  let rendering = $state<RenderState | null>(null);
 
   const formats = supportedFormats();
   let recordPrefs = $state<RecordPrefs>({ formatId: formats[0]?.id ?? '', fps: 60, bitrateMbps: 16 });
@@ -56,8 +70,61 @@
   }
 
   function onRenderEvent(msg: FromRender) {
-    if (msg.type === 'stats') fps = Math.round(msg.fps);
-    else if (msg.type === 'error') error = msg.message;
+    switch (msg.type) {
+      case 'stats':
+        fps = Math.round(msg.fps);
+        break;
+      case 'error':
+        error = msg.message;
+        break;
+      case 'renderProgress':
+        if (rendering) Object.assign(rendering, { frame: msg.frame, total: msg.total });
+        break;
+      case 'renderDone':
+        if (rendering) {
+          if (msg.buffer) saveBlob(new Blob([msg.buffer], { type: rendering.mimeType }), rendering.fileName);
+          notice = `Saved ${rendering.fileName}`;
+        }
+        rendering = null;
+        break;
+      case 'renderCancelled':
+        rendering = null;
+        notice = 'Render cancelled.';
+        break;
+      case 'renderError':
+        rendering = null;
+        error = `Render failed: ${msg.message}`;
+        break;
+    }
+  }
+
+  async function startRender(req: RenderRequest) {
+    if (!host || rendering) return;
+    const format = RENDER_FORMATS[req.codec];
+    let fileName = timestampedName('hypno', format.ext);
+    // Where supported, stream straight to a file on disk so long 4K renders don't fill memory.
+    let fileHandle: FileSystemFileHandle | undefined;
+    if (window.showSaveFilePicker) {
+      try {
+        fileHandle = await window.showSaveFilePicker({
+          suggestedName: fileName,
+          types: [{ description: format.label, accept: { [format.mimeType]: [`.${format.ext}`] } }],
+        });
+        fileName = fileHandle.name;
+      } catch (e) {
+        if (e instanceof DOMException && e.name === 'AbortError') return; // user closed the dialog
+        fileHandle = undefined; // picker unavailable here (e.g. iframe); fall back to download
+      }
+    }
+    const total = Math.max(1, Math.round(req.fps * req.duration));
+    rendering = { frame: 0, total, startedAt: performance.now(), fileName, mimeType: format.mimeType, cancelling: false };
+    host.startRender({ ...req, settings: $state.snapshot(settings) }, fileHandle);
+  }
+
+  function cancelRender() {
+    if (!rendering) return;
+    rendering.cancelling = true;
+    host?.cancelRender();
   }
 
   onMount(() => {
@@ -144,7 +211,7 @@
   }
 
   function onKeydown(e: KeyboardEvent) {
-    if (!safetyAck || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (!safetyAck || rendering || e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === 'Escape' && drawerOpen) {
       drawerOpen = false;
       return;
@@ -201,7 +268,7 @@
     <Button size="sm" color="dark" class="p-2" onclick={() => (userPlaying = !userPlaying)} aria-label={playing ? 'Pause (Space)' : 'Play (Space)'} title={playing ? 'Pause (Space)' : 'Play (Space)'}>
       {#if playing}<PauseSolid class="h-5 w-5" />{:else}<PlaySolid class="h-5 w-5" />{/if}
     </Button>
-    <Button size="sm" color={recorder ? 'red' : 'dark'} class="p-2" onclick={toggleRecording} aria-label={recorder ? 'Stop recording (R)' : 'Record (R)'} title={recorder ? 'Stop recording (R)' : 'Record (R)'} disabled={formats.length === 0}>
+    <Button size="sm" color={recorder ? 'red' : 'dark'} class="p-2" onclick={toggleRecording} aria-label={recorder ? 'Stop recording (R)' : 'Record (R)'} title={recorder ? 'Stop recording (R)' : 'Record (R)'} disabled={formats.length === 0 || !!rendering}>
       {#if recorder}<StopSolid class="h-5 w-5" />{:else}<VideoCameraSolid class="h-5 w-5" />{/if}
     </Button>
     <Button size="sm" color="dark" class="p-2" onclick={toggleFullscreen} aria-label="Fullscreen (F)" title="Fullscreen (F)">
@@ -217,6 +284,9 @@
 
   <Sidebar bind:open={drawerOpen} {settings} onreset={resetSettings}>
     {#snippet record()}
+      <h3 class="mb-4 border-b border-gray-700 pb-1 text-xs font-semibold tracking-wider text-primary-500 uppercase">
+        Live recording
+      </h3>
       <RecordPanel
         bind:prefs={recordPrefs}
         {formats}
@@ -224,6 +294,10 @@
         elapsed={recordElapsed}
         ontoggle={toggleRecording}
       />
+      <h3 class="mt-8 mb-4 border-b border-gray-700 pb-1 text-xs font-semibold tracking-wider text-primary-500 uppercase">
+        Render to file
+      </h3>
+      <RenderPanel busy={!!rendering || !!recorder} onrender={startRender} />
     {/snippet}
   </Sidebar>
 {/if}
@@ -233,5 +307,21 @@
     {error}
   </Toast>
 {/if}
+
+{#if notice}
+  <Toast color="green" class="fixed bottom-4 left-1/2 z-50 -translate-x-1/2" dismissable onclose={() => (notice = null)}>
+    {notice}
+  </Toast>
+{/if}
+
+<RenderProgress
+  open={!!rendering}
+  frame={rendering?.frame ?? 0}
+  total={rendering?.total ?? 0}
+  startedAt={rendering?.startedAt ?? 0}
+  fileName={rendering?.fileName ?? ''}
+  cancelling={rendering?.cancelling ?? false}
+  oncancel={cancelRender}
+/>
 
 <SafetyGate open={!safetyAck} {reducedMotion} onaccept={acceptSafety} />

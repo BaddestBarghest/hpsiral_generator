@@ -3,7 +3,7 @@ import { LiveClock } from '../engine/clock';
 import { initialTimeline, step, type TimelineState } from '../engine/timeline';
 import { Renderer } from './Renderer';
 import type { AnyCanvas } from './gl';
-import type { FromRender, Viewport } from './protocol';
+import type { Emit, Viewport } from './protocol';
 
 const raf: (cb: (t: number) => void) => number =
   typeof requestAnimationFrame === 'function'
@@ -22,13 +22,14 @@ export class RenderLoop {
   private dirty = true;
   private frames = 0;
   private statsStart = 0;
+  private suspended = false;
 
   constructor(
     canvas: AnyCanvas,
     private settings: Settings,
     private viewport: Viewport,
     private playing: boolean,
-    private emit: (msg: FromRender) => void,
+    private emit: Emit,
   ) {
     this.renderer = new Renderer(canvas);
     this.applySize();
@@ -53,6 +54,13 @@ export class RenderLoop {
     this.clock.reset();
   }
 
+  /** Freezes the live animation (e.g. during an offline render); resumes without a time jump. */
+  setSuspended(s: boolean): void {
+    this.suspended = s;
+    this.clock.reset();
+    this.dirty = true;
+  }
+
   private applySize(): void {
     const { cssWidth, cssHeight, dpr } = this.viewport;
     const k = Math.min(dpr, this.settings.maxDpr) * this.settings.renderScale;
@@ -61,6 +69,7 @@ export class RenderLoop {
 
   private frame = (now: number) => {
     this.frameId = raf(this.frame);
+    if (this.suspended) return;
     const dt = this.clock.tick(now, Number(this.settings.maxFps));
     if (dt === null) return;
     if (this.playing) this.tl = step(this.tl, this.settings, dt);

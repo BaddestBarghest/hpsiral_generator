@@ -27,6 +27,7 @@
     <div class="space-y-1.5">
       <Label for="rec-format" class="text-sm">Format</Label>
       <Select
+        placeholder=""
         id="rec-format"
         size="sm"
         disabled={recording}
@@ -37,6 +38,7 @@
     <div class="space-y-1.5">
       <Label for="rec-fps" class="text-sm">Frame rate</Label>
       <Select
+        placeholder=""
         id="rec-fps"
         size="sm"
         disabled={recording}
@@ -60,7 +62,6 @@
     </Button>
     <Helper class="text-xs">
       Records what's on screen in real time, without the controls. The file downloads when you stop.
-      Offline rendering at any resolution is coming in a later update.
     </Helper>
   {/if}
 </div>

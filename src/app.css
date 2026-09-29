@@ -5,8 +5,8 @@
 
 /* Scan only the flowbite-svelte components we use; the whole package adds ~200 kB of CSS.
    When importing a new component, add its folder here. */
-@source "../node_modules/flowbite-svelte/dist/{alert,buttons,dialog,drawer,modal,tabs,toast,toolbar,utils,theme}";
-@source "../node_modules/flowbite-svelte/dist/forms/{helper,label,range,select,toggle}";
+@source "../node_modules/flowbite-svelte/dist/{alert,buttons,dialog,drawer,modal,progress,tabs,toast,toolbar,utils,theme}";
+@source "../node_modules/flowbite-svelte/dist/forms/{helper,input-field,label,range,select,toggle}";
 /* Every icon shares the same size classes; one outline + one solid file covers them. */
 @source "../node_modules/flowbite-svelte-icons/dist/CloseOutline.svelte";
 @source "../node_modules/flowbite-svelte-icons/dist/PlaySolid.svelte";

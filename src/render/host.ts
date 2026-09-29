@@ -1,5 +1,7 @@
 import type { Settings } from '../settings/schema';
+import type { RenderJob } from '../record/renderJob';
 import { RenderLoop } from './loop';
+import { RenderTask } from './renderTask';
 import type { FromRender, ToRender, Viewport } from './protocol';
 
 /** Main-thread handle to the render loop, whether it runs in a worker or inline. */
@@ -8,6 +10,9 @@ export interface RenderHost {
   setSettings(s: Settings): void;
   setViewport(v: Viewport): void;
   setPlaying(p: boolean): void;
+  /** Starts an offline render; progress and the result arrive through `onEvent`. */
+  startRender(job: RenderJob, fileHandle?: FileSystemFileHandle): void;
+  cancelRender(): void;
   destroy(): void;
 }
 
@@ -39,17 +44,22 @@ export function createRenderHost(canvas: HTMLCanvasElement, init: HostInit): Ren
       setSettings: (settings) => post({ type: 'settings', settings }),
       setViewport: (viewport) => post({ type: 'viewport', viewport }),
       setPlaying: (playing) => post({ type: 'playing', playing }),
+      startRender: (job, fileHandle) => post({ type: 'render', job, fileHandle }),
+      cancelRender: () => post({ type: 'cancelRender' }),
       destroy: () => worker.terminate(),
     };
   }
 
   const loop = new RenderLoop(canvas, init.settings, init.viewport, init.playing, init.onEvent);
+  const task = new RenderTask(loop, init.onEvent);
   queueMicrotask(() => init.onEvent({ type: 'ready' }));
   return {
     mode: 'inline',
     setSettings: (s) => loop.setSettings(s),
     setViewport: (v) => loop.setViewport(v),
     setPlaying: (p) => loop.setPlaying(p),
+    startRender: (job, fileHandle) => void task.start(job, fileHandle),
+    cancelRender: () => task.cancel(),
     destroy: () => loop.destroy(),
   };
 }
