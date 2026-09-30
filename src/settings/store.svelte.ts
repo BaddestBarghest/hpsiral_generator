@@ -26,6 +26,11 @@ export function resetSettings(): void {
   Object.assign(settings, defaults());
 }
 
+/** Replaces every setting (e.g. with those from a share link). */
+export function applySettings(next: Settings): void {
+  Object.assign(settings, next);
+}
+
 /** Replaces every setting with those in a saved settings file; throws if it isn't one. */
 export function loadSettingsFile(text: string): void {
   Object.assign(settings, settingsFromJson(text));

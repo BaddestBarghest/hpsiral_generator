@@ -6,6 +6,7 @@
   import RecordPanel from './RecordPanel.svelte';
   import RenderPanel from './RenderPanel.svelte';
   import SectionHeading from './SectionHeading.svelte';
+  import ShareLink from './ShareLink.svelte';
 
   let {
     open = $bindable(),
@@ -36,6 +37,15 @@
 <PanelDrawer bind:open bind:width title="Export">
   <div class="settings-scroll min-h-0 flex-1 space-y-4 overflow-y-auto py-2 pe-3">
     <div class="space-y-1">
+      <SectionHeading>Share link</SectionHeading>
+      <p class="pt-1 text-xs text-gray-400">
+        Opens the app with your current settings. They're stored in the link itself, so nothing is uploaded. Your
+        Display settings stay yours.
+      </p>
+    </div>
+    <ShareLink {settings} />
+
+    <div class="space-y-1 pt-6">
       <SectionHeading>Render to file</SectionHeading>
       <p class="pt-1 text-xs text-gray-400">
         Best quality: every frame is rendered exactly, at any size, and can loop seamlessly. Uses your current

@@ -14,7 +14,8 @@
     StopSolid,
     VideoCameraSolid,
   } from 'flowbite-svelte-icons';
-  import { settings, persistSettings, resetSettings, loadSettingsFile } from './settings/store.svelte';
+  import { settings, persistSettings, resetSettings, loadSettingsFile, applySettings } from './settings/store.svelte';
+  import { hasSharedSettings, settingsFromLink } from './settings/shareLink';
   import { settingsToJson } from './settings/schema';
   import { readStored, writeStored } from './storage';
   import { initCustomFont } from './ui/customFont.svelte';
@@ -84,6 +85,21 @@
     try {
       loadSettingsFile(await file.text());
       notice = `Loaded settings from ${file.name}.`;
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  // ── Share links ──
+  // Settings from a link's hash replace the current ones; the hash is then dropped from the
+  // address, so a reload keeps any changes made since instead of going back to the link's.
+  async function loadSharedSettings() {
+    if (!hasSharedSettings(location.hash)) return;
+    const hash = location.hash;
+    history.replaceState(null, '', location.pathname + location.search);
+    try {
+      applySettings(await settingsFromLink(hash, $state.snapshot(settings)));
+      notice = 'Loaded settings from a shared link.';
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     }
@@ -229,11 +245,15 @@
     window.addEventListener('resize', onResize);
     const onFs = () => (isFullscreen = !!document.fullscreenElement);
     document.addEventListener('fullscreenchange', onFs);
+    // A link pasted into this tab only changes the hash, which doesn't reload the page.
+    void loadSharedSettings();
+    window.addEventListener('hashchange', loadSharedSettings);
     return () => {
       disposed = true;
       ro.disconnect();
       window.removeEventListener('resize', onResize);
       document.removeEventListener('fullscreenchange', onFs);
+      window.removeEventListener('hashchange', loadSharedSettings);
       host?.destroy();
     };
   });
