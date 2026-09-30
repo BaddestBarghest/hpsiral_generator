@@ -8,6 +8,8 @@ out vec4 outColor;
 
 uniform vec2 uResolution;   // backing-store pixels
 uniform float uZoom;
+uniform vec2 uCenter;       // pattern centre on screen (short screen half = 1, y up)
+uniform mat2 uRotate;       // screen → pattern rotation (turns the pattern anticlockwise)
 
 // Geometry shared by both spirals. The outline shape is fixed per compiled variant:
 // SHAPE 0 round, 1 polygon, 2 star, 3 heart.
@@ -16,7 +18,6 @@ uniform float uShapeDepth;   // star: how far the points cut in (0..1)
 #if SHAPE == 3
 uniform float uOutline[128]; // heart outline radius per direction (render/shapes.ts)
 #endif
-uniform float uExponent;     // power-law exponent k (radial = density * rho^k)
 uniform float uCenterSpread; // c in rho = sqrt(r^2 + c^2); 0 = unmodified
 uniform float uCenterTaper;  // 0..1, how much arm width shrinks towards the centre
 uniform float uSoftness;     // 0..1, extra edge blur
@@ -26,7 +27,10 @@ uniform float uWobbleFreq;   // ripples per unit of distance (or around the circ
 uniform float uWobblePhase;  // cycles
 
 struct Spiral {
-  int mode;       // 0 archimedean, 1 logarithmic, 2 concentric, 3 power law, 4 tunnel, 5 globe
+  int mode;       // 0 spiral, 2 concentric, 5 globe
+  int curve;      // spiral arm curve (see armRadial): 0 linear, 1 logarithmic, 2 power, 3 inverse, 4 exponential, 5 ripple
+  float curveA;   // the curve's parameters: power exponent, exponential growth, ripple amount
+  float curveB;   // ripple: ripples per unit of distance
   float arms;
   float density;
   float flow;     // cycles, wrapped at a multiple of the arm count
@@ -43,6 +47,8 @@ const float PALETTE_SAMPLES = 32.0;
 const float PALETTE_WIDTH = 6.0 * PALETTE_SAMPLES;
 uniform int uColorMode[3];   // 0 static, 1 gradient, 2 cycle, 3 kaleidoscopic
 uniform float uShift[3];     // palette steps
+uniform float uKaleidoTurn;  // kaleidoscope sectors' rotation, turns anticlockwise
+uniform float uKaleidoSectors; // kaleidoscope sectors around the centre
 uniform vec3 uAvg1;          // spiral 1 average colour (anti-moiré fade)
 uniform vec3 uAvg2;          // spiral 2 average arm colour
 
@@ -56,11 +62,10 @@ uniform float uHueShift;     // radians
 #endif
 
 const float TAU = 6.283185307179586;
-const float KALEIDO_SECTORS = 6.0;
 const float GRADIENT_SCALE = 1.5; // palette steps per unit of distance from centre
 const float TAPER_RADIUS = 1.0;   // arms reach full width at this distance (short screen half = 1)
 const float WOBBLE_TURNS = 0.15;  // arm displacement at full wobble, in turns
-const float TUNNEL_DEPTH = 0.5;   // tunnel: rings per unit of density at distance 1 (they crowd towards the centre)
+const float TUNNEL_DEPTH = 0.5;   // inverse curve: rings per unit of density at distance 1 (they crowd towards the centre)
 const float GLOBE_RADIUS = 0.9;   // globe: size (short screen half = 1)
 const float GLOBE_TILT = 0.5;     // globe: spin axis tipped towards the viewer (radians), so a pole shows
 const float GLOBE_WIND = 0.3;     // globe: how tightly the stripes wind towards the poles, per unit of density
@@ -117,6 +122,24 @@ struct Field {
   float inside; // globe: 1 on the ball, 0 around it (1 for every other pattern)
   float shade;  // globe: lighting on the ball (1 elsewhere)
 };
+
+// A spiral arm's curve: cycles of the pattern between the centre and softened distance `rho`
+// (times the density). Its slope is how tightly the arms wind there. Anchored to 0 at the
+// centre where it can be (at rho = c). Mirrored in render/armCurves.ts for the preview.
+float armRadial(Spiral sp, float rho, float c) {
+  if (sp.curve == 1) return 0.5 * log(rho);
+  if (sp.curve == 2) return pow(rho, sp.curveA) - pow(c, sp.curveA);
+  // Inverse (tunnel): equal steps in depth (1 / distance), so rings crowd towards the vanishing point.
+  if (sp.curve == 3) return -TUNNEL_DEPTH / rho;
+  // Exponential: winds ever tighter outwards; starts as tight as linear at the centre.
+  if (sp.curve == 4) return (exp(sp.curveA * rho) - exp(sp.curveA * c)) / sp.curveA;
+  // Ripple: linear, with the winding alternately tighter and looser (never backwards: amount < 1).
+  if (sp.curve == 5) {
+    float w = TAU * sp.curveB;
+    return rho - c + sp.curveA * (sin(w * rho) - sin(w * c)) / w;
+  }
+  return rho - c; // linear (Archimedean)
+}
 
 // p: position in pattern space; pixel: pattern-space units per screen pixel.
 Field spiralField(vec2 p, Spiral sp, float pixel) {
@@ -181,12 +204,7 @@ Field spiralField(vec2 p, Spiral sp, float pixel) {
   float c = uCenterSpread;
   F.rho = sqrt(rs * rs + c * c);
 
-  float radial;
-  if (sp.mode == 1) radial = sp.density * 0.5 * log(F.rho);
-  else if (sp.mode == 3) radial = sp.density * (pow(F.rho, uExponent) - pow(c, uExponent));
-  // Tunnel: equal steps in depth (1 / distance), so rings crowd towards the vanishing point.
-  else if (sp.mode == 4) radial = -sp.density * TUNNEL_DEPTH / F.rho;
-  else radial = sp.density * (F.rho - c); // "- c" keeps rings anchored at the centre
+  float radial = sp.mode == 0 ? sp.density * armRadial(sp, F.rho, c) : sp.density * (F.rho - c);
 
   // Twist and wobble bend the arms; everything here is continuous (no atan seam), so
   // screen-space derivatives give its gradient exactly.
@@ -232,9 +250,11 @@ float coverage(Spiral sp, Field F, float b, out float armK, out float gapK) {
   return cov * F.inside;
 }
 
-float kaleidoSector(float theta) {
-  // Sector boundaries include the atan seam (theta = ±pi), hiding the arm-index jump there.
-  return floor(fract(theta / TAU) * KALEIDO_SECTORS);
+// theta: the spiral's (mirrored) angle; mirror: its sign, so the sectors turn the same way
+// on screen for mirrored spirals. The arm index is continuous across the atan seam (it is
+// taken mod arms), so the boundaries can sit anywhere.
+float kaleidoSector(float theta, float mirror) {
+  return floor(fract(theta / TAU - uKaleidoTurn * mirror) * uKaleidoSectors);
 }
 
 vec3 blend(vec3 base, vec3 top, float a, int mode) {
@@ -251,7 +271,8 @@ void main() {
   float minRes = min(uResolution.x, uResolution.y);
   // Short side of the screen spans [-1, 1].
   vec2 screen = (gl_FragCoord.xy - 0.5 * uResolution) / (0.5 * minRes);
-  vec2 p = screen / uZoom;
+  // Move the pattern's centre, turn it, then zoom (rotation keeps distances, so `pixel` holds).
+  vec2 p = uRotate * (screen - uCenter) / uZoom;
   float pixel = 2.0 / (minRes * uZoom); // pattern units per screen pixel
 
   // ── Spiral 1: arms over gaps ────────────────────────────────────────────
@@ -261,7 +282,7 @@ void main() {
   float armK, gapK;
   float cov = coverage(s1, F, b, armK, gapK);
   float g = F.rho * GRADIENT_SCALE;
-  float sector = kaleidoSector(F.theta);
+  float sector = kaleidoSector(F.theta, s1.mirror);
   vec3 col = mix(bandColor(1, s1, gapK, g, sector), bandColor(0, s1, armK, g, sector), cov);
   // Where a whole cycle shrinks to ~1-2px, fade to the average colour instead of moiré.
   col = mix(col, uAvg1, smoothstep(0.6, 1.0, F.dv) * F.inside);
@@ -276,7 +297,7 @@ void main() {
     float fade2 = smoothstep(0.6, 1.0, F2.dv);
     float armK2, gapK2;
     float cov2 = mix(coverage(s2, F2, b2, armK2, gapK2), b2 * F2.inside, fade2);
-    vec3 c2 = mix(bandColor(2, s2, armK2, F2.rho * GRADIENT_SCALE, kaleidoSector(F2.theta)), uAvg2, fade2) * F2.shade;
+    vec3 c2 = mix(bandColor(2, s2, armK2, F2.rho * GRADIENT_SCALE, kaleidoSector(F2.theta, s2.mirror)), uAvg2, fade2) * F2.shade;
     col = blend(col, c2, cov2 * uS2Opacity, uS2Blend);
   }
 #endif

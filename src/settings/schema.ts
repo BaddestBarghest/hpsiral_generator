@@ -2,6 +2,8 @@
 // The UI, persistence/validation and renderer uniforms are all driven from this table.
 
 import { BOLD_FONT_IDS, CUSTOM_FONT_ID, FONTS } from './fonts';
+import { CURVE_SHAPES, type Curve } from '../engine/curves';
+import { ARM_CURVES } from '../render/armCurves';
 
 export type Group = 'Spiral' | 'Colour' | 'Aux. spiral' | 'Rhythm' | 'Text' | 'Display';
 
@@ -12,14 +14,36 @@ interface Base<K extends string> {
   /** Optional sub-heading within the group; shown when it differs from the previous param's. */
   section?: string;
   help?: string;
-  /** Show the control only when each listed setting has one of the listed values. */
-  showIf?: Readonly<Record<string, readonly string[]>>;
+  /** Always show the help (e.g. a safety warning) instead of hiding it behind the ⓘ. */
+  helpAlways?: boolean;
+  /**
+   * Show the control only when each listed setting has one of the listed values; with a list
+   * of conditions, when any of them holds.
+   */
+  showIf?: Condition | readonly Condition[];
 }
 
 const FONT_OPTIONS = [...FONTS.map((f) => ({ value: f.id, label: f.label })), { value: CUSTOM_FONT_ID, label: 'Your font' } as const];
 
+/** Settings → the values any of which makes a condition hold. */
+type Condition = Readonly<Record<string, readonly string[]>>;
+
+/** Some colour list uses the kaleidoscopic mode (its sectors). */
+const KALEIDO_IN_USE: readonly Condition[] = [{ armColorMode: ['kaleido'] }, { gapColorMode: ['kaleido'] }, { s2Enabled: ['true'], s2ColorMode: ['kaleido'] }];
+
 /** Patterns with arms (everything but concentric rings). */
-const SPIRAL_MODES = ['archimedean', 'logarithmic', 'power', 'tunnel', 'globe'] as const;
+const SPIRAL_MODES = ['spiral', 'globe'] as const;
+/** Patterns drawn from the outline shape, with centre spread and wobble (everything but the globe). */
+const FLAT_MODES = ['spiral', 'concentric'] as const;
+
+/**
+ * For settings shared by both spirals (outline shape, centre spread, twist, wobble): shown
+ * when the main spiral's pattern is one of `modes`, or the auxiliary spiral is on with one.
+ */
+const eitherSpiral = (modes: readonly string[], extra: Condition = {}): readonly Condition[] => [
+  { ...extra, mode: modes },
+  { ...extra, s2Enabled: ['true'], s2Mode: modes },
+];
 /** Shapes with a count (sides or points). */
 const COUNTED_SHAPES = ['polygon', 'star'] as const;
 
@@ -37,6 +61,8 @@ export interface RangeParam<K extends string = string> extends Base<K> {
    * settings (zoom, density, durations); `sq` gives the low end more room while keeping 0.
    */
   curve?: 'log' | 'sq';
+  /** Can be animated with the beat (see `BeatLoop`); only for values the renderer reads per frame. */
+  loopable?: boolean;
 }
 
 export interface SelectParam<K extends string = string, V extends string = string> extends Base<K> {
@@ -77,13 +103,17 @@ export type Param = RangeParam | SelectParam | ToggleParam | PaletteParam | Colo
 export const MAX_BAND_COLORS = 3;
 
 const PATTERNS = [
-  { value: 'archimedean', label: 'Archimedean spiral' },
-  { value: 'logarithmic', label: 'Logarithmic spiral' },
-  { value: 'power', label: 'Power-law spiral' },
+  { value: 'spiral', label: 'Spiral' },
   { value: 'concentric', label: 'Concentric circles' },
-  { value: 'tunnel', label: 'Tunnel' },
   { value: 'globe', label: 'Globe (3D)' },
 ] as const;
+
+// Arm curve parameters (render/armCurves.ts), the same for both spirals.
+const CURVE_HELP = 'How tightly the arms wind at each distance from the centre.';
+const EXPONENT = { label: 'Exponent', type: 'range', min: 0.2, max: 2, step: 0.01, default: 0.4, help: 'Below 1 = tighter towards the centre; 1 = linear; above 1 = tighter towards the edge.' } as const;
+const GROWTH = { label: 'Growth', type: 'range', min: 0.5, max: 4, step: 0.05, default: 2, help: 'How fast the arms wind tighter towards the edge.' } as const;
+const RIPPLE_AMOUNT = { label: 'Ripple amount', type: 'range', min: 0, max: 0.95, step: 0.01, default: 0.6, help: 'How much the winding alternates between tight and loose.' } as const;
+const RIPPLE_COUNT = { label: 'Ripples', type: 'range', min: 0.5, max: 8, step: 0.1, default: 2, curve: 'log', help: 'Bands of tight and loose winding between the centre and the edge.' } as const;
 
 const DIRECTIONS = [
   { value: 'inward', label: 'Inward' },
@@ -108,9 +138,15 @@ const COLOR_MODES = [
 
 export const schema = [
   // ── Spiral ────────────────────────────────────────────────────────────
-  { key: 'mode', label: 'Pattern', group: 'Spiral', section: 'Shape', type: 'select', default: 'power', options: PATTERNS },
+  { key: 'mode', label: 'Pattern', group: 'Spiral', section: 'Shape', type: 'select', default: 'spiral', options: PATTERNS },
+  { key: 'armCurve', label: 'Arm curve', group: 'Spiral', section: 'Shape', type: 'select', default: 'power', options: ARM_CURVES, help: CURVE_HELP, showIf: { mode: ['spiral'] } },
+  { key: 'exponent', group: 'Spiral', section: 'Shape', ...EXPONENT, showIf: { mode: ['spiral'], armCurve: ['power'] } },
+  { key: 'curveGrowth', group: 'Spiral', section: 'Shape', ...GROWTH, showIf: { mode: ['spiral'], armCurve: ['exponential'] } },
+  { key: 'rippleAmount', group: 'Spiral', section: 'Shape', ...RIPPLE_AMOUNT, showIf: { mode: ['spiral'], armCurve: ['ripple'] } },
+  { key: 'rippleCount', group: 'Spiral', section: 'Shape', ...RIPPLE_COUNT, showIf: { mode: ['spiral'], armCurve: ['ripple'] } },
   {
-    key: 'shape', label: 'Shape', group: 'Spiral', section: 'Shape', type: 'select', default: 'round', help: 'Applies to both spirals.',
+    key: 'shape', label: 'Shape', group: 'Spiral', section: 'Shape', type: 'select', default: 'round', help: 'Applies to both spirals (not to the globe).',
+    showIf: eitherSpiral(FLAT_MODES),
     options: [
       { value: 'round', label: 'Round' },
       { value: 'polygon', label: 'Polygon' },
@@ -118,24 +154,26 @@ export const schema = [
       { value: 'heart', label: 'Heart' },
     ],
   },
-  { key: 'sides', label: 'Count', group: 'Spiral', section: 'Shape', type: 'range', min: 3, max: 12, step: 1, default: 6, help: 'Sides of the polygon or points of the star.', showIf: { shape: COUNTED_SHAPES } },
-  { key: 'shapeDepth', label: 'Depth', group: 'Spiral', section: 'Shape', type: 'range', min: 0.1, max: 0.8, step: 0.01, default: 0.45, help: 'How deep the star’s points cut in.', showIf: { shape: ['star'] } },
+  { key: 'sides', label: 'Count', group: 'Spiral', section: 'Shape', type: 'range', min: 3, max: 12, step: 1, default: 6, help: 'Sides of the polygon or points of the star.', showIf: eitherSpiral(FLAT_MODES, { shape: COUNTED_SHAPES }) },
+  { key: 'shapeDepth', label: 'Depth', group: 'Spiral', section: 'Shape', type: 'range', min: 0.1, max: 0.8, step: 0.01, default: 0.45, help: 'How deep the star’s points cut in.', showIf: eitherSpiral(FLAT_MODES, { shape: ['star'] }) },
   { key: 'arms', label: 'Arms', group: 'Spiral', section: 'Shape', type: 'range', min: 1, max: 16, step: 1, default: 2, showIf: { mode: SPIRAL_MODES } },
   { key: 'density', label: 'Density', group: 'Spiral', section: 'Shape', type: 'range', min: 0.5, max: 30, step: 0.1, default: 10, curve: 'log' },
-  { key: 'exponent', label: 'Power-law exponent', group: 'Spiral', section: 'Shape', type: 'range', min: 0.2, max: 1.5, step: 0.01, default: 0.4, help: 'Lower = tighter centre; 1 = Archimedean.', showIf: { mode: ['power'] } },
-  { key: 'centerSpread', label: 'Center spread', group: 'Spiral', section: 'Shape', type: 'range', min: 0, max: 0.6, step: 0.01, default: 0, help: 'Widens the stripes near the middle so they don’t bunch up.' },
+  { key: 'centerSpread', label: 'Center spread', group: 'Spiral', section: 'Shape', type: 'range', min: 0, max: 0.6, step: 0.01, default: 0, help: 'Widens the stripes near the middle so they don’t bunch up. Applies to both spirals.', showIf: eitherSpiral(FLAT_MODES) },
   { key: 'centerTaper', label: 'Center taper', group: 'Spiral', section: 'Shape', type: 'range', min: 0, max: 1, step: 0.01, default: 0.6, help: 'Thins the arms towards the middle. Higher = pointier core, 0 = constant width.' },
   { key: 'balance', label: 'Arm width', group: 'Spiral', section: 'Shape', type: 'range', min: 0.05, max: 0.95, step: 0.01, default: 0.5, help: 'Share of each cycle taken by the arm; the rest is the gap.' },
   { key: 'softness', label: 'Edge softness', group: 'Spiral', section: 'Shape', type: 'range', min: 0, max: 1, step: 0.01, default: 0 },
-  { key: 'zoom', label: 'Zoom', group: 'Spiral', section: 'Shape', type: 'range', min: 0.25, max: 4, step: 0.01, default: 1, curve: 'log' },
+  { key: 'zoom', label: 'Zoom', group: 'Spiral', section: 'Shape', type: 'range', loopable: true, min: 0.25, max: 4, step: 0.01, default: 1, curve: 'log' },
   { key: 'mirror', label: 'Mirror (clockwise ↔ anticlockwise)', group: 'Spiral', section: 'Shape', type: 'toggle', default: false, showIf: { mode: SPIRAL_MODES } },
-  { key: 'speed', label: 'Speed', group: 'Spiral', section: 'Motion', type: 'range', min: 0, max: 4, step: 0.01, default: 0.5, unit: 'cycles/s', curve: 'sq' },
+  { key: 'centerX', label: 'Horizontal position', group: 'Spiral', section: 'Position', type: 'range', loopable: true, min: -2, max: 2, step: 0.01, default: 0, help: 'Moves the centre of both spirals: negative left, positive right. Far enough out, only the edge of the pattern sweeps across the screen.' },
+  { key: 'centerY', label: 'Vertical position', group: 'Spiral', section: 'Position', type: 'range', loopable: true, min: -2, max: 2, step: 0.01, default: 0, help: 'Negative moves the centre down, positive up.' },
+  { key: 'rotation', label: 'Rotation', group: 'Spiral', section: 'Position', type: 'range', loopable: true, min: -180, max: 180, step: 1, default: 0, unit: '°', help: 'Turns both spirals (and their outline shape) anticlockwise, e.g. to stand a star on one point.' },
+  { key: 'speed', label: 'Speed', group: 'Spiral', section: 'Motion', type: 'range', loopable: true, min: 0, max: 4, step: 0.01, default: 0.5, unit: 'cycles/s', curve: 'sq' },
   { key: 'direction', label: 'Direction', group: 'Spiral', section: 'Motion', type: 'select', default: 'inward', options: DIRECTIONS },
-  { key: 'twist', label: 'Twist', group: 'Spiral', section: 'Motion', type: 'range', min: -3, max: 3, step: 0.01, default: 0, unit: 'turns', help: 'Bends the arms more the further out they are.', showIf: { mode: ['logarithmic', 'power', 'tunnel'] } },
-  { key: 'wobble', label: 'Wobble', group: 'Spiral', section: 'Motion', type: 'range', min: 0, max: 1, step: 0.01, default: 0, help: 'Ripples the arms sideways.' },
-  { key: 'wobbleFreq', label: 'Wobble ripples', group: 'Spiral', section: 'Motion', type: 'range', min: 0.5, max: 12, step: 0.1, default: 3, curve: 'log' },
-  { key: 'wobbleSpeed', label: 'Wobble speed', group: 'Spiral', section: 'Motion', type: 'range', min: 0, max: 3, step: 0.01, default: 0.5, unit: 'cycles/s', curve: 'sq' },
-  { key: 'trails', label: 'Afterimage trails', group: 'Spiral', section: 'Afterimage', type: 'range', min: 0, max: 2, step: 0.01, default: 0, unit: 's', curve: 'sq', help: 'Leaves fading echoes of the spirals; the time is how long an echo takes to fade by half. Text has its own in the Text tab.' },
+  { key: 'twist', label: 'Twist', group: 'Spiral', section: 'Motion', type: 'range', loopable: true, min: -3, max: 3, step: 0.01, default: 0, unit: 'turns', help: 'Bends the arms more the further out they are. Applies to both spirals.', showIf: eitherSpiral(['spiral']) },
+  { key: 'wobble', label: 'Wobble', group: 'Spiral', section: 'Motion', type: 'range', min: 0, max: 1, step: 0.01, default: 0, help: 'Ripples the arms (or rings) sideways. Applies to both spirals.', showIf: eitherSpiral(FLAT_MODES) },
+  { key: 'wobbleFreq', label: 'Wobble ripples', group: 'Spiral', section: 'Motion', type: 'range', min: 0.5, max: 12, step: 0.1, default: 3, curve: 'log', showIf: eitherSpiral(FLAT_MODES) },
+  { key: 'wobbleSpeed', label: 'Wobble speed', group: 'Spiral', section: 'Motion', type: 'range', min: 0, max: 3, step: 0.01, default: 0.5, unit: 'cycles/s', curve: 'sq', showIf: eitherSpiral(FLAT_MODES) },
+  { key: 'trails', label: 'Afterimage trails', group: 'Spiral', section: 'Afterimage', type: 'range', loopable: true, min: 0, max: 2, step: 0.01, default: 0, unit: 's', curve: 'sq', help: 'Leaves fading echoes of the spirals; the time is how long an echo takes to fade by half. Text has its own in the Text tab.' },
 
   // ── Colour ────────────────────────────────────────────────────────────
   // Colours never change the geometry: each cycle is one arm stripe + one gap,
@@ -146,23 +184,38 @@ export const schema = [
   { key: 'gapColors', label: 'Colours', group: 'Colour', section: 'Gaps', type: 'palette', minColors: 1, maxColors: MAX_BAND_COLORS, default: ['#000000'] },
   { key: 'gapColorMode', label: 'Colour mode', group: 'Colour', section: 'Gaps', type: 'select', default: 'static', options: COLOR_MODES },
   { key: 'gapShift', label: 'Colour shift speed', group: 'Colour', section: 'Gaps', type: 'range', min: 0, max: 2, step: 0.01, default: 0, unit: 'cycles/s', curve: 'sq' },
+  {
+    key: 'kaleidoSpin', label: 'Sector spin', group: 'Colour', section: 'Colour sectors', type: 'range', loopable: true, min: -0.5, max: 0.5, step: 0.01, default: 0, unit: 'turns/s',
+    help: 'Turns the coloured slices made by the Kaleidoscopic colour mode around the centre; the stripes themselves don’t move. Negative turns them clockwise.',
+    showIf: KALEIDO_IN_USE,
+  },
+  {
+    key: 'kaleidoSectors', label: 'Sectors', group: 'Colour', section: 'Colour sectors', type: 'range', min: 2, max: 12, step: 1, default: 6,
+    help: 'How many coloured slices go round the centre. A multiple of the number of colours keeps every slice next to a different colour.',
+    showIf: KALEIDO_IN_USE,
+  },
   { key: 'hueRoll', label: 'Hue roll speed', group: 'Colour', section: 'Hue', type: 'range', min: 0, max: 0.25, step: 0.001, default: 0, unit: 'rev/s', curve: 'sq', help: 'Rotates the hue of every colour.' },
-  { key: 'glow', label: 'Strength', group: 'Colour', section: 'Glow', type: 'range', min: 0, max: 2, step: 0.01, default: 0, help: 'Soft light spilling from the bright parts of the spirals.' },
-  { key: 'glowSize', label: 'Spread', group: 'Colour', section: 'Glow', type: 'range', min: 0.02, max: 0.3, step: 0.005, default: 0.08, curve: 'log', help: 'How far the light spreads.' },
+  { key: 'glow', label: 'Strength', group: 'Colour', section: 'Glow', type: 'range', loopable: true, min: 0, max: 2, step: 0.01, default: 0, help: 'Soft light spilling from the bright parts of the spirals.' },
+  { key: 'glowSize', label: 'Spread', group: 'Colour', section: 'Glow', type: 'range', loopable: true, min: 0.02, max: 0.3, step: 0.005, default: 0.08, curve: 'log', help: 'How far the light spreads.' },
   { key: 'glowColor', label: 'Colour', group: 'Colour', section: 'Glow', type: 'color', default: '#ffffff', help: 'White keeps each stripe’s own colour; other colours tint the glow.' },
-  { key: 'vignette', label: 'Strength', group: 'Colour', section: 'Vignette', type: 'range', min: 0, max: 1, step: 0.01, default: 0 },
-  { key: 'vignetteSize', label: 'Size', group: 'Colour', section: 'Vignette', type: 'range', min: 0.2, max: 1.6, step: 0.01, default: 0.9 },
+  { key: 'vignette', label: 'Strength', group: 'Colour', section: 'Vignette', type: 'range', loopable: true, min: 0, max: 1, step: 0.01, default: 0 },
+  { key: 'vignetteSize', label: 'Size', group: 'Colour', section: 'Vignette', type: 'range', loopable: true, min: 0.2, max: 1.6, step: 0.01, default: 0.9 },
   { key: 'vignetteColor', label: 'Colour', group: 'Colour', section: 'Vignette', type: 'color', default: '#000000' },
 
   // ── Auxiliary spiral ──────────────────────────────────────────────────
   // A second pattern drawn over the first: arms only (its gaps are see-through).
-  // Shares zoom, shape, exponent, centre spread/taper, softness, twist and wobble.
+  // Shares zoom, shape, centre spread/taper, softness, twist and wobble.
   { key: 's2Enabled', label: 'Show auxiliary spiral', group: 'Aux. spiral', type: 'toggle', default: false },
-  { key: 's2Mode', label: 'Pattern', group: 'Aux. spiral', type: 'select', default: 'archimedean', options: PATTERNS, showIf: { s2Enabled: ['true'] } },
+  { key: 's2Mode', label: 'Pattern', group: 'Aux. spiral', type: 'select', default: 'spiral', options: PATTERNS, showIf: { s2Enabled: ['true'] } },
+  { key: 's2ArmCurve', label: 'Arm curve', group: 'Aux. spiral', type: 'select', default: 'linear', options: ARM_CURVES, help: CURVE_HELP, showIf: { s2Enabled: ['true'], s2Mode: ['spiral'] } },
+  { key: 's2Exponent', group: 'Aux. spiral', ...EXPONENT, showIf: { s2Enabled: ['true'], s2Mode: ['spiral'], s2ArmCurve: ['power'] } },
+  { key: 's2CurveGrowth', group: 'Aux. spiral', ...GROWTH, showIf: { s2Enabled: ['true'], s2Mode: ['spiral'], s2ArmCurve: ['exponential'] } },
+  { key: 's2RippleAmount', group: 'Aux. spiral', ...RIPPLE_AMOUNT, showIf: { s2Enabled: ['true'], s2Mode: ['spiral'], s2ArmCurve: ['ripple'] } },
+  { key: 's2RippleCount', group: 'Aux. spiral', ...RIPPLE_COUNT, showIf: { s2Enabled: ['true'], s2Mode: ['spiral'], s2ArmCurve: ['ripple'] } },
   { key: 's2Arms', label: 'Arms', group: 'Aux. spiral', type: 'range', min: 1, max: 16, step: 1, default: 1, showIf: { s2Enabled: ['true'], s2Mode: SPIRAL_MODES } },
   { key: 's2Density', label: 'Density', group: 'Aux. spiral', type: 'range', min: 0.5, max: 30, step: 0.1, default: 4, curve: 'log', showIf: { s2Enabled: ['true'] } },
   { key: 's2Width', label: 'Arm width', group: 'Aux. spiral', type: 'range', min: 0.05, max: 0.95, step: 0.01, default: 0.2, showIf: { s2Enabled: ['true'] } },
-  { key: 's2Speed', label: 'Speed', group: 'Aux. spiral', type: 'range', min: 0, max: 4, step: 0.01, default: 0.3, unit: 'cycles/s', curve: 'sq', showIf: { s2Enabled: ['true'] } },
+  { key: 's2Speed', label: 'Speed', group: 'Aux. spiral', type: 'range', loopable: true, min: 0, max: 4, step: 0.01, default: 0.3, unit: 'cycles/s', curve: 'sq', showIf: { s2Enabled: ['true'] } },
   { key: 's2Direction', label: 'Direction', group: 'Aux. spiral', type: 'select', default: 'outward', options: DIRECTIONS, showIf: { s2Enabled: ['true'] } },
   { key: 's2Mirror', label: 'Mirror (clockwise ↔ anticlockwise)', group: 'Aux. spiral', type: 'toggle', default: true, showIf: { s2Enabled: ['true'], s2Mode: SPIRAL_MODES } },
   { key: 's2Colors', label: 'Colours', group: 'Aux. spiral', section: 'Colour & blending', type: 'palette', minColors: 1, maxColors: MAX_BAND_COLORS, default: ['#f5cb5c'], showIf: { s2Enabled: ['true'] } },
@@ -183,17 +236,6 @@ export const schema = [
   // ── Rhythm ────────────────────────────────────────────────────────────
   // Everything here follows the master tempo; see engine/rhythm.ts.
   { key: 'bpm', label: 'Beats per minute', group: 'Rhythm', section: 'Tempo', type: 'range', min: 30, max: 240, step: 1, default: 120, tapTempo: true },
-  { key: 'rampEnabled', label: 'Vary speed with the beat', group: 'Rhythm', section: 'Speed ramp', type: 'toggle', default: false, help: 'Speeds both spirals up and down over a cycle of beats.' },
-  { key: 'rampMin', label: 'Slowest', group: 'Rhythm', section: 'Speed ramp', type: 'range', min: 0, max: 1, step: 0.05, default: 0.4, unit: '× speed', showIf: { rampEnabled: ['true'] } },
-  { key: 'rampMax', label: 'Fastest', group: 'Rhythm', section: 'Speed ramp', type: 'range', min: 1, max: 4, step: 0.05, default: 1.6, unit: '× speed', showIf: { rampEnabled: ['true'] } },
-  { key: 'rampBeats', label: 'Cycle length', group: 'Rhythm', section: 'Speed ramp', type: 'range', min: 2, max: 64, step: 1, default: 16, unit: 'beats', curve: 'log', showIf: { rampEnabled: ['true'] } },
-  {
-    key: 'rampShape', label: 'Curve', group: 'Rhythm', section: 'Speed ramp', type: 'select', default: 'smooth', showIf: { rampEnabled: ['true'] },
-    options: [
-      { value: 'smooth', label: 'Smooth' },
-      { value: 'linear', label: 'Linear' },
-    ],
-  },
   {
     key: 'flashMode', label: 'Mode', group: 'Rhythm', section: 'Flash', type: 'select', default: 'off',
     options: [
@@ -213,7 +255,7 @@ export const schema = [
   { key: 'zoomPulseRate', label: 'Rate', group: 'Rhythm', section: 'Zoom pulse', type: 'select', default: '2', options: PULSE_RATES },
   { key: 'colorStep', label: 'Step colours on the beat', group: 'Rhythm', section: 'Colour steps', type: 'toggle', default: false, help: 'Colour shifts jump to the next colour on the beat instead of flowing. Applies to every colour list with a shift speed above 0.' },
   { key: 'colorStepRate', label: 'Rate', group: 'Rhythm', section: 'Colour steps', type: 'select', default: '1', options: PULSE_RATES, showIf: { colorStep: ['true'] } },
-  { key: 'flashUnlock', label: 'Allow more than 3 flashes per second', group: 'Rhythm', section: 'Safety', type: 'toggle', default: false, help: '⚠ Rapid flashing can trigger seizures. While off, beat flashes, inversions, colour steps and text flashes together stay at or below 3 per second: beat effects skip beats, and the text flash is dropped if it still doesn’t fit.' },
+  { key: 'flashUnlock', label: 'Allow more than 3 flashes per second', group: 'Rhythm', section: 'Safety', type: 'toggle', helpAlways: true, default: false, help: '⚠ Rapid flashing can trigger seizures. While off, beat flashes, inversions, colour steps and text flashes together stay at or below 3 per second: beat effects skip beats, and the text flash is dropped if it still doesn’t fit.' },
 
   // ── Text ──────────────────────────────────────────────────────────────
   // Timed phrases; see engine/text.ts.
@@ -300,7 +342,27 @@ type ValueOf<P> = P extends { type: 'range' } ? number
   : P extends { type: 'select'; options: readonly { value: infer V }[] } ? V
   : never;
 
-export type Settings = { -readonly [P in Entry as P['key']]: ValueOf<P> };
+type SchemaSettings = { -readonly [P in Entry as P['key']]: ValueOf<P> };
+
+/** Settings that can be animated with the beat. */
+export type LoopableKey = Extract<Entry, { loopable: true }>['key'];
+
+/**
+ * A setting animated with the beat: it runs from its own value (at the cycle's ends) to
+ * `to` (at the curve's peak) and back, once every `beats` beats.
+ */
+export interface BeatLoop extends Curve {
+  to: number;
+  beats: number;
+}
+
+/** Cycle lengths offered for beat loops. At least 2 beats keeps them under 3 per second. */
+export const LOOP_BEATS = [2, 4, 8, 16, 32, 64] as const;
+
+export type BeatLoops = Partial<Record<LoopableKey, BeatLoop>>;
+
+/** Every setting in the schema, plus the beat loops (which are stored per setting). */
+export type Settings = SchemaSettings & { loops: BeatLoops };
 export type SettingKey = keyof Settings;
 
 export const groups: Group[] = ['Spiral', 'Colour', 'Aux. spiral', 'Rhythm', 'Text', 'Display'];
@@ -310,15 +372,49 @@ export function defaults(): Settings {
   for (const p of schema as readonly Param[]) {
     out[p.key] = p.type === 'palette' ? [...p.default] : p.default;
   }
+  out.loops = {};
   return out as Settings;
+}
+
+/** Range params that can be animated with the beat. */
+export const loopableParams = (schema as readonly Param[]).filter((p): p is RangeParam => p.type === 'range' && !!p.loopable);
+
+/** A new beat loop for `p` at `value`: a quarter of the slider away, towards the middle. */
+export function newBeatLoop(p: RangeParam, value: number): BeatLoop {
+  const pos = toSlider(p, value);
+  const to = fromSlider(p, pos + (pos < SLIDER_RESOLUTION / 2 ? 1 : -1) * SLIDER_RESOLUTION * 0.25);
+  return { to, shape: 'smooth', sharpness: 0.5, peak: 0.5, beats: 8 };
+}
+
+function sanitizeLoops(input: unknown): BeatLoops {
+  const src = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+  const out: Record<string, BeatLoop> = {};
+  const num = (v: unknown, min: number, max: number, fallback: number) =>
+    typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : fallback;
+  for (const p of loopableParams) {
+    const l = src[p.key] as Record<string, unknown> | undefined;
+    if (!l || typeof l !== 'object') continue;
+    out[p.key] = {
+      to: num(l.to, p.min, p.max, p.default),
+      shape: CURVE_SHAPES.find((o) => o.value === l.shape)?.value ?? 'smooth',
+      sharpness: num(l.sharpness, 0, 1, 0.5),
+      peak: num(l.peak, 0.05, 0.95, 0.5),
+      beats: LOOP_BEATS.find((b) => b === l.beats) ?? 8,
+    };
+  }
+  return out;
 }
 
 /** Whether a control applies to the current settings (see `showIf`). */
 export function isVisible(p: Param, s: Settings): boolean {
   if (!p.showIf) return true;
   const values = s as Record<string, unknown>;
-  return Object.entries(p.showIf).every(([key, allowed]) => allowed.includes(String(values[key])));
+  const holds = (c: Condition) => Object.entries(c).every(([key, allowed]) => allowed.includes(String(values[key])));
+  return conditions(p).some(holds);
 }
+
+/** A param's `showIf` as a list of alternatives (empty when it has none). */
+export const conditions = (p: Param): readonly Condition[] => (!p.showIf ? [] : Array.isArray(p.showIf) ? p.showIf : [p.showIf as Condition]);
 
 /** Slider positions run 0..SLIDER_RESOLUTION for curved ranges. */
 export const SLIDER_RESOLUTION = 1000;
@@ -352,8 +448,10 @@ export function fromSlider(p: RangeParam, pos: number): number {
  * Version stamped on saved settings, so a later change to what a setting means can convert
  * old values in `migrate`. Unversioned saves count as version 1: they may predate or follow
  * the 2026-09-29 change of `trails` to a half-life in seconds, so those values are kept as is.
+ * Version 3 replaced the Rhythm tab's speed ramp with beat loops on the two speeds; version 4
+ * turned the spiral patterns into one "spiral" pattern with an arm curve.
  */
-export const SETTINGS_VERSION = 2;
+export const SETTINGS_VERSION = 4;
 
 /** Settings plus their version, as saved. */
 export function withVersion(s: Settings): Settings & { version: number } {
@@ -383,14 +481,56 @@ export function settingsFromJson(text: string): Settings {
 /** Carries settings saved by older versions forward; run before `sanitize`. */
 export function migrate(input: unknown): unknown {
   if (!input || typeof input !== 'object') return input;
-  const raw = input as Record<string, unknown>;
-  // Future conversions go here, keyed on `raw.version` (missing = 1), e.g. `if (version < 3) ...`.
+  let raw = input as Record<string, unknown>;
+  const version = typeof raw.version === 'number' ? raw.version : 1;
   // ≤0.1: one `palette` of alternating bands → first colour paints the arms, second the gaps.
   if (Array.isArray(raw.palette) && !('armColors' in raw)) {
     const [arm, gap] = raw.palette as unknown[];
-    return { ...raw, armColors: [arm], gapColors: [gap ?? '#000000'] };
+    raw = { ...raw, armColors: [arm], gapColors: [gap ?? '#000000'] };
   }
+  if (version < 3 && raw.rampEnabled === true) raw = migrateSpeedRamp(raw);
+  if (version < 4) raw = migrateArmCurves(raw);
   return raw;
+}
+
+/** v4: spiral patterns became one "spiral" pattern with an arm curve each. */
+const OLD_SPIRAL_PATTERNS: Record<string, string> = { archimedean: 'linear', logarithmic: 'logarithmic', power: 'power', tunnel: 'inverse' };
+
+function migrateArmCurves(raw: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...raw };
+  for (const [modeKey, curveKey] of [['mode', 'armCurve'], ['s2Mode', 's2ArmCurve']] as const) {
+    const curve = OLD_SPIRAL_PATTERNS[String(raw[modeKey])];
+    if (curve) {
+      out[modeKey] = 'spiral';
+      out[curveKey] = curve;
+    }
+  }
+  // The auxiliary spiral used to share the main spiral's exponent.
+  if ('exponent' in raw && !('s2Exponent' in raw)) out.s2Exponent = raw.exponent;
+  return out;
+}
+
+/**
+ * v3: the speed ramp (speed × a multiplier running from `rampMin` to `rampMax` and back, shared
+ * by both spirals) becomes a beat loop on each speed, from speed × min to speed × max. The
+ * old ramp settings are left for `sanitize` to drop.
+ */
+function migrateSpeedRamp(raw: Record<string, unknown>): Record<string, unknown> {
+  const num = (v: unknown, fallback: number) => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
+  const min = num(raw.rampMin, 0.4);
+  const max = num(raw.rampMax, 1.6);
+  const rampBeats = num(raw.rampBeats, 16);
+  // The ramp's cycle could be any whole number of beats; loops offer powers of two.
+  const beats = LOOP_BEATS.reduce((best, b) => (Math.abs(Math.log(b / rampBeats)) < Math.abs(Math.log(best / rampBeats)) ? b : best));
+  const curve = { shape: raw.rampShape ?? 'smooth', sharpness: raw.rampSharpness ?? 0.5, peak: raw.rampPeak ?? 0.5, beats };
+  const loops = { ...(raw.loops && typeof raw.loops === 'object' ? raw.loops : {}) } as Record<string, unknown>;
+  const out: Record<string, unknown> = { ...raw, loops };
+  for (const [key, fallback] of [['speed', 0.5], ['s2Speed', 0.3]] as const) {
+    const speed = num(raw[key], fallback);
+    out[key] = speed * min;
+    loops[key] = { ...curve, to: speed * max };
+  }
+  return out;
 }
 
 /** A `#rrggbb` colour (either case). */
@@ -428,5 +568,6 @@ export function sanitize(input: unknown): Settings {
         break;
     }
   }
+  out.loops = sanitizeLoops(src.loops);
   return out as Settings;
 }

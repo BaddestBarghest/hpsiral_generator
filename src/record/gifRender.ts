@@ -1,6 +1,7 @@
 // Animated GIF render (gifenc). Loaded lazily; runs in the render worker or inline.
 import { applyPalette, GIFEncoder, quantize, type Palette } from 'gifenc';
 import { initialTimeline, step } from '../engine/timeline';
+import { loopMax, loopsChangeColours } from '../engine/modulation';
 import { Renderer } from '../render/Renderer';
 import { frameCount, type RenderJob } from './renderJob';
 import { RenderCancelled } from './renderErrors';
@@ -80,11 +81,12 @@ export async function renderGif(
   }
 }
 
-/** Whether colours change over time (hue roll, trails, or shifting through several colours). */
+/** Whether colours change over time (hue roll, trails, beat loops, or shifting through several colours). */
 function colorsAnimate({ settings: s }: RenderJob): boolean {
   return (
     s.hueRoll !== 0 ||
-    s.trails > 0 || // blended echoes create colours no sample frame contains
+    loopMax(s, 'trails') > 0 || // blended echoes create colours no sample frame contains
+    loopsChangeColours(s) || // e.g. a pulsing glow blends through in-between colours
     s.textEnabled || // text (and its fades/flash) may not appear in any sample frame
     (s.armColors.length > 1 && s.armShift !== 0) ||
     (s.gapColors.length > 1 && s.gapShift !== 0) ||

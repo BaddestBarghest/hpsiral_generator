@@ -10,11 +10,13 @@
   import { dur, MEDIUM } from './motion';
   import { Button, TabItem, Tabs } from 'flowbite-svelte';
   import { ChevronLeftOutline, ChevronRightOutline, FloppyDiskOutline, FolderOpenOutline, UndoOutline } from 'flowbite-svelte-icons';
-  import { groups, isVisible, schema, type Param, type Settings } from '../settings/schema';
+  import { groups, isVisible, newBeatLoop, schema, type LoopableKey, type Param, type RangeParam, type Settings } from '../settings/schema';
   import Control from './Control.svelte';
   import PanelDrawer from './PanelDrawer.svelte';
   import AccordionSection from './AccordionSection.svelte';
   import PaletteSets from './color/PaletteSets.svelte';
+  import BeatLoopEditor from './BeatLoopEditor.svelte';
+  import ArmPreview from './ArmPreview.svelte';
   import { autoShiftFor, hintFor } from './hints';
   import { readStored, writeStored } from '../storage';
 
@@ -138,6 +140,23 @@
     if (fileInput) fileInput.value = ''; // so picking the same file again still loads it
   }
 
+  // ── Beat loops ──
+  // The ∿ button starts a loop and opens its settings; after that it shows or hides them.
+  let loopOpen = $state<Record<string, boolean>>({});
+  function toggleLoop(p: RangeParam) {
+    const key = p.key as LoopableKey;
+    if (!settings.loops[key]) {
+      settings.loops[key] = newBeatLoop(p, settings[key]);
+      loopOpen[key] = true;
+    } else {
+      loopOpen[key] = !loopOpen[key];
+    }
+  }
+  function removeLoop(key: LoopableKey) {
+    delete settings.loops[key];
+    loopOpen[key] = false;
+  }
+
   function set(key: string, v: unknown) {
     const extra = autoShiftFor(key, v, settings);
     (settings as Record<string, unknown>)[key] = v;
@@ -182,13 +201,29 @@
             <PaletteSets {settings} />
           {/if}
           {#snippet control(p: Param)}
+            {@const loop = p.type === 'range' && p.loopable ? settings.loops[p.key as LoopableKey] : undefined}
             <Control
               param={p}
               value={settings[p.key as keyof Settings]}
               hint={hintFor(p.key, settings)}
               onchange={(v) => set(p.key, v)}
               {onbeat}
+              loopTo={loop?.to ?? null}
+              loopOpen={!!loopOpen[p.key]}
+              onloop={p.type === 'range' && p.loopable ? () => toggleLoop(p) : undefined}
             />
+            {#if loop && loopOpen[p.key] && p.type === 'range'}
+              <BeatLoopEditor
+                param={p}
+                value={settings[p.key as LoopableKey]}
+                {loop}
+                onchange={(l) => (settings.loops[p.key as LoopableKey] = l)}
+                onremove={() => removeLoop(p.key as LoopableKey)}
+              />
+            {/if}
+            {#if p.key === 'armCurve' || p.key === 's2ArmCurve'}
+              <ArmPreview {settings} s2={p.key === 's2ArmCurve'} />
+            {/if}
           {/snippet}
           {#each blocks(visible) as block, bi (`${bi}:${block.section ?? ''}`)}
             {#if block.section}

@@ -1,6 +1,7 @@
 import type { Settings } from '../settings/schema';
 import { initialTimeline, step, type TimelineState } from '../engine/timeline';
 import { trailWarmupFrames, type Renderer } from '../render/Renderer';
+import { loopMax } from '../engine/modulation';
 
 /**
  * Afterimages are built by feedback, one blend per drawn frame. At low frame rates (GIFs,
@@ -12,7 +13,7 @@ const TRAIL_RATE = 60;
 
 /** Feedback steps per output frame: 1 without afterimages, else enough to reach TRAIL_RATE. */
 export function subSteps(settings: Settings, fps: number): number {
-  const trails = settings.trails > 0 || (settings.textEnabled && settings.textTrails > 0);
+  const trails = loopMax(settings, 'trails') > 0 || (settings.textEnabled && settings.textTrails > 0);
   return trails ? Math.max(1, Math.ceil(TRAIL_RATE / fps - 1e-9)) : 1;
 }
 

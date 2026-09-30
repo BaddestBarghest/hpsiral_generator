@@ -1,5 +1,6 @@
 import type { Settings } from '../settings/schema';
-import { beatPeriod, beatsPerSecond, rampMean } from './rhythm';
+import { beatPeriod, beatsPerSecond } from './rhythm';
+import { isRateLoopKey, loopMean } from './modulation';
 import { lcm } from './math';
 import { textCycleSlots, textSlotBeats } from './text';
 
@@ -35,7 +36,29 @@ export function flowPeriod2(s: Settings): number {
   return s.s2Mode === 'concentric' ? s.s2Colors.length : Math.round(s.s2Arms);
 }
 
-type RateKey = 'speed' | 'hueRoll' | 'armShift' | 'gapShift' | 's2Speed' | 's2Shift' | 'wobbleSpeed' | 'bpm' | 'textInterval';
+/**
+ * Turns of colour sector spin after which the colours look the same, or 0 when turning is
+ * invisible. Turning by one sector moves each kaleidoscopic palette on by one colour, so it
+ * takes a whole number of every such palette's colours; unless the colours don't divide the
+ * sectors evenly (two neighbours share a colour where the numbering wraps round), and then
+ * only a whole turn brings that pair back.
+ */
+export function kaleidoPeriod(s: Settings): number {
+  const n = Math.round(s.kaleidoSectors);
+  let sectors = 0;
+  for (const [colors, mode, shown] of [
+    [s.armColors, s.armColorMode, true],
+    [s.gapColors, s.gapColorMode, true],
+    [s.s2Colors, s.s2ColorMode, s.s2Enabled],
+  ] as const) {
+    if (!shown || mode !== 'kaleido' || colors.length < 2) continue;
+    const band = n % colors.length === 0 ? colors.length : n;
+    sectors = sectors ? lcm(sectors, band) : band;
+  }
+  return sectors / n;
+}
+
+type RateKey = 'speed' | 'hueRoll' | 'armShift' | 'gapShift' | 's2Speed' | 's2Shift' | 'wobbleSpeed' | 'kaleidoSpin' | 'bpm' | 'textInterval';
 
 interface Motion {
   key: RateKey;
@@ -50,24 +73,40 @@ interface Motion {
 
 const same = (r: number) => r;
 
+/** Whether either spiral shows wobble (the globe ignores it). */
+const drawsWobble = (s: Settings) => s.mode !== 'globe' || (s.s2Enabled && s.s2Mode !== 'globe');
+
 function motions(s: Settings): Motion[] {
-  // With a speed ramp, the flow advances by speed × mean multiplier per second on
-  // average; over whole ramp cycles (guaranteed by the tempo motion) that is exact.
-  const mean = rampMean(s);
+  // A speed looping with the beat flows at its mean speed on average; over whole loop
+  // cycles (guaranteed by the tempo motion) that is exact. Its rate is that mean, and
+  // `planLoop` nudges it by scaling both ends of the loop.
   const beats = beatPeriod(s);
   const phrases = textCycleSlots(s);
   const all: Motion[] = [
-    { key: 'speed', label: 'Speed', rate: s.speed * mean, period: flowPeriod(s), toSetting: (r) => r / mean },
+    { key: 'speed', label: s.loops.speed ? 'Speed (average)' : 'Speed', rate: loopMean(s, 'speed'), period: flowPeriod(s), toSetting: same },
     { key: 'hueRoll', label: 'Hue roll speed', rate: s.hueRoll, period: 1, toSetting: same },
     // A single colour can't visibly shift, so it doesn't constrain the loop.
     // With colour steps on the beat, colour shifts follow the tempo instead (see beatPeriod).
     { key: 'armShift', label: 'Arm colour shift', rate: s.armColors.length > 1 && !s.colorStep ? s.armShift : 0, period: s.armColors.length, toSetting: same },
     { key: 'gapShift', label: 'Gap colour shift', rate: s.gapColors.length > 1 && !s.colorStep ? s.gapShift : 0, period: s.gapColors.length, toSetting: same },
     // Hidden or invisible motions don't constrain the loop either.
-    { key: 's2Speed', label: 'Auxiliary spiral speed', rate: s.s2Enabled ? s.s2Speed * mean : 0, period: flowPeriod2(s), toSetting: (r) => r / mean },
+    {
+      key: 's2Speed',
+      label: s.loops.s2Speed ? 'Auxiliary spiral speed (average)' : 'Auxiliary spiral speed',
+      rate: s.s2Enabled ? loopMean(s, 's2Speed') : 0,
+      period: flowPeriod2(s),
+      toSetting: same,
+    },
     { key: 's2Shift', label: 'Auxiliary spiral colour shift', rate: s.s2Enabled && s.s2Colors.length > 1 && !s.colorStep ? s.s2Shift : 0, period: s.s2Colors.length, toSetting: same },
-    { key: 'wobbleSpeed', label: 'Wobble speed', rate: s.wobble > 0 ? s.wobbleSpeed : 0, period: 1, toSetting: same },
-    // Ramp cycles, beat pulses and beat-synced text all repeat every `beats` beats.
+    { key: 'wobbleSpeed', label: 'Wobble speed', rate: s.wobble > 0 && drawsWobble(s) ? s.wobbleSpeed : 0, period: 1, toSetting: same },
+    {
+      key: 'kaleidoSpin',
+      label: s.loops.kaleidoSpin ? 'Colour sector spin (average)' : 'Colour sector spin',
+      rate: kaleidoPeriod(s) > 0 ? loopMean(s, 'kaleidoSpin') : 0,
+      period: kaleidoPeriod(s),
+      toSetting: same,
+    },
+    // Beat loops, beat pulses and beat-synced text all repeat every `beats` beats.
     { key: 'bpm', label: 'Tempo (BPM)', rate: beats > 0 ? beatsPerSecond(s) : 0, period: beats, toSetting: (r) => r * 60 },
     // Text timed in seconds: one slot per `textInterval`; it repeats after `textCycleSlots` slots.
     {
@@ -192,7 +231,15 @@ export function planLoop(s: Settings, targetSeconds: number, fps: number, mode: 
     const rate = (Math.sign(m.rate) * cycles * m.period) / duration;
     const from = m.toSetting(m.rate);
     const to = m.toSetting(rate);
-    settings[m.key] = to;
+    if (isRateLoopKey(m.key)) {
+      // The rate is the mean: scale the setting and its beat loop alike.
+      const scale = rate / m.rate;
+      settings[m.key] = s[m.key] * scale;
+      const l = s.loops[m.key];
+      if (l) settings.loops = { ...settings.loops, [m.key]: { ...l, to: l.to * scale } };
+    } else {
+      settings[m.key] = to;
+    }
     if (Math.abs(to - from) > 5e-4) changes.push({ key: m.key, label: m.label, from, to });
   }
   return { duration, frames, settings, changes, shortest };

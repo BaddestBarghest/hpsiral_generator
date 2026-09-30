@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  conditions,
   defaults,
   fromSlider,
   groups,
@@ -89,16 +90,45 @@ describe('schema', () => {
   it('only shows mode-specific controls for the modes they affect', () => {
     const find = (key: string) => (schema as readonly Param[]).find((p) => p.key === key)!;
     const s = defaults();
-    expect(isVisible(find('exponent'), { ...s, mode: 'power' })).toBe(true);
-    expect(isVisible(find('exponent'), { ...s, mode: 'archimedean' })).toBe(false);
+    expect(isVisible(find('exponent'), { ...s, mode: 'spiral', armCurve: 'power' })).toBe(true);
+    expect(isVisible(find('exponent'), { ...s, mode: 'spiral', armCurve: 'linear' })).toBe(false);
+    expect(isVisible(find('exponent'), { ...s, mode: 'globe', armCurve: 'power' })).toBe(false);
+    expect(isVisible(find('rippleCount'), { ...s, mode: 'spiral', armCurve: 'ripple' })).toBe(true);
+    expect(isVisible(find('armCurve'), { ...s, mode: 'concentric' })).toBe(false);
     expect(isVisible(find('arms'), { ...s, mode: 'concentric' })).toBe(false);
-    expect(isVisible(find('arms'), { ...s, mode: 'logarithmic' })).toBe(true);
+    expect(isVisible(find('arms'), { ...s, mode: 'spiral' })).toBe(true);
     expect(isVisible(find('density'), { ...s, mode: 'concentric' })).toBe(true);
+    expect(isVisible(find('s2Exponent'), { ...s, s2Enabled: true, s2Mode: 'spiral', s2ArmCurve: 'power' })).toBe(true);
+  });
+
+  it('shows shared settings whenever either spiral uses them', () => {
+    const find = (key: string) => (schema as readonly Param[]).find((p) => p.key === key)!;
+    const globe = { ...defaults(), mode: 'globe' as const };
+    // The globe ignores the outline, centre spread, twist and wobble...
+    for (const key of ['shape', 'centerSpread', 'twist', 'wobble', 'wobbleSpeed']) expect(isVisible(find(key), globe)).toBe(false);
+    // ...but they're back as soon as the auxiliary spiral uses them.
+    const withAux = { ...globe, s2Enabled: true, s2Mode: 'spiral' as const };
+    for (const key of ['shape', 'centerSpread', 'twist', 'wobble', 'wobbleSpeed']) expect(isVisible(find(key), withAux)).toBe(true);
+    expect(isVisible(find('twist'), { ...globe, s2Enabled: true, s2Mode: 'concentric' })).toBe(false); // rings don't twist
+    expect(isVisible(find('sides'), { ...withAux, shape: 'star' })).toBe(true);
+    expect(isVisible(find('sides'), { ...withAux, shape: 'heart' })).toBe(false);
+    // A hidden auxiliary spiral doesn't count.
+    expect(isVisible(find('shape'), { ...withAux, s2Enabled: false })).toBe(false);
+    // Twist works on every arm curve, linear included (it used to be hidden there but still applied).
+    expect(isVisible(find('twist'), { ...defaults(), mode: 'spiral', armCurve: 'linear' })).toBe(true);
+  });
+
+  it('turns old spiral patterns into the spiral pattern with an arm curve', () => {
+    const s = settingsFromJson(JSON.stringify({ version: 3, mode: 'tunnel', s2Mode: 'power', exponent: 0.7 }));
+    expect(s).toMatchObject({ mode: 'spiral', armCurve: 'inverse', s2Mode: 'spiral', s2ArmCurve: 'power', exponent: 0.7, s2Exponent: 0.7 });
+    const rings = settingsFromJson(JSON.stringify({ version: 3, mode: 'concentric', s2Mode: 'archimedean' }));
+    expect(rings).toMatchObject({ mode: 'concentric', s2Mode: 'spiral', s2ArmCurve: 'linear' });
+    expect(settingsFromJson(JSON.stringify({ version: 1, mode: 'logarithmic' })).armCurve).toBe('logarithmic');
   });
 
   it('only references real settings and values in showIf', () => {
     for (const p of schema as readonly Param[]) {
-      for (const [key, allowed] of Object.entries(p.showIf ?? {})) {
+      for (const [key, allowed] of conditions(p).flatMap((c) => Object.entries(c))) {
         const target = (schema as readonly Param[]).find((q) => q.key === key);
         expect(['select', 'toggle']).toContain(target?.type);
         const values =

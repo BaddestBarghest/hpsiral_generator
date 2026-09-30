@@ -5,11 +5,14 @@ A hypnotic spiral generator that runs in the browser. It renders with WebGL2 on 
 > ⚠️ **Photosensitivity warning:** this app shows moving patterns and changing colours that may trigger seizures in people with photosensitive epilepsy.
 
 ## Features
-- Power-law, Archimedean, logarithmic and concentric patterns. Controls: arms, density, exponent, center spread, center taper (pointy core), arm width, softness, zoom, speed and direction.
+- Spiral, concentric and globe patterns. A spiral's arm curve sets how tightly it winds with distance: linear (Archimedean), logarithmic, power law, inverse (tunnel), exponential or ripple, each with its own settings and a live preview of the arms. Controls: arms, density, center spread, center taper (pointy core), arm width, softness, zoom, speed and direction.
 - Round or polygon (3–12 sides) shapes for every pattern
 - An auxiliary spiral drawn over the main one, with its own pattern, arms, density, speed, direction and 1–3 colours, plus opacity and blend modes (normal, add, multiply, screen, difference)
 - Effects: twist, wobble, afterimage trails (time-based, so the same at any frame rate; renders pre-roll so trails and loops stay seamless) and vignette
-- Rhythm: master tempo with tap-to-set BPM, speed ramps (smooth or linear, integrated exactly), soft flash or strobe, inversion and zoom pulses. Flashing is capped at 3 per second (WCAG 2.3.1) unless explicitly unlocked
+- Rhythm: master tempo with tap-to-set BPM, soft flash or strobe, inversion and zoom pulses. Flashing is capped at 3 per second (WCAG 2.3.1) unless explicitly unlocked
+- Position: move the pattern's centre (even off-screen) and rotate it
+- Beat loops: the ∿ button on speed, position, rotation, zoom, twist, afterimage, glow, vignette and colour-sector sliders animates them with the beat, over 2–64 beats, along a smooth (sine), linear, parabolic, Gaussian, exponential or pulse (on/off) curve with adjustable sharpness and peak position. Looping speeds are integrated exactly, so exports match live playback and loops stay seamless
+- Kaleidoscopic colours: 2–12 colour sectors that can spin either way (Colour sectors → Sector spin)
 - Text: timed phrases (in order or shuffled, on a timer or synced to the beat) with fade, zoom or pop animation, 15 bundled open-licence sans-serif fonts (clean, geometric, condensed and heavy), outline and colour. Very short times give subliminal flashes, and an optional short screen flash can mark each phrase (safety-capped like other flashes)
 - Separate colours for arms and gaps (1–3 each). Each can be static per stripe, a gradient along the arm, cycling or kaleidoscopic, with its own shift speed. Global hue roll.
 - Adding colours never changes the geometry.

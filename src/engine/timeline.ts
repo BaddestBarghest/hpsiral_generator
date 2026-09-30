@@ -1,5 +1,6 @@
 import type { Settings } from '../settings/schema';
-import { beatsPerSecond, rampIntegral } from './rhythm';
+import { beatsPerSecond } from './rhythm';
+import { loopIntegral } from './modulation';
 import { wrap } from './math';
 
 /**
@@ -33,7 +34,9 @@ export interface TimelineState {
   s2ColorPhase: number;
   /** Wobble ripple travel in cycles, wrapped to [0, 1). */
   wobblePhase: number;
-  /** Beats elapsed at the master tempo (not wrapped; drives ramp and pulses). */
+  /** Kaleidoscope sectors' rotation in turns (anticlockwise), wrapped to [0, 1). */
+  kaleidoPhase: number;
+  /** Beats elapsed at the master tempo (not wrapped; drives beat loops and pulses). */
   beatPhase: number;
 }
 
@@ -47,6 +50,7 @@ export function initialTimeline(): TimelineState {
     gapColorPhase: 0,
     s2ColorPhase: 0,
     wobblePhase: 0,
+    kaleidoPhase: 0,
     beatPhase: 0,
   };
 }
@@ -72,17 +76,23 @@ export function step(state: TimelineState, s: Settings, dt: number): TimelineSta
   const dir = s.direction === 'inward' ? 1 : -1;
   const dir2 = s.s2Direction === 'inward' ? 1 : -1;
   const beatPhase = state.beatPhase + beatsPerSecond(s) * dt;
-  // Seconds of flow at unit speed, stretched by the speed ramp (exact integral).
-  const flowTime = rampIntegral(s, state.beatPhase, beatPhase, dt);
+  // Cycles flowed this step; exact integrals when a speed loops with the beat.
+  const flow = loopIntegral(s, 'speed', state.beatPhase, beatPhase, dt);
+  const flow2 = loopIntegral(s, 's2Speed', state.beatPhase, beatPhase, dt);
   return {
     time: state.time + dt,
-    flowPhase: wrap(state.flowPhase + s.speed * dir * flowTime, FLOW_PERIOD),
-    flowPhase2: wrap(state.flowPhase2 + s.s2Speed * dir2 * flowTime, FLOW_PERIOD),
+    flowPhase: wrap(state.flowPhase + dir * flow, FLOW_PERIOD),
+    flowPhase2: wrap(state.flowPhase2 + dir2 * flow2, FLOW_PERIOD),
     huePhase: colourPhase(state.huePhase, s.hueRoll, dt, 1),
     armColorPhase: colourPhase(state.armColorPhase, s.armShift, dt, COLOR_PERIOD),
     gapColorPhase: colourPhase(state.gapColorPhase, s.gapShift, dt, COLOR_PERIOD),
     s2ColorPhase: colourPhase(state.s2ColorPhase, s.s2Shift, dt, COLOR_PERIOD),
     wobblePhase: wrap(state.wobblePhase + s.wobbleSpeed * dt, 1),
+    // Switched off, the sectors go back to where they started, like the colour phases.
+    kaleidoPhase:
+      s.kaleidoSpin === 0 && !s.loops.kaleidoSpin
+        ? 0
+        : wrap(state.kaleidoPhase + loopIntegral(s, 'kaleidoSpin', state.beatPhase, beatPhase, dt), 1),
     beatPhase,
   };
 }

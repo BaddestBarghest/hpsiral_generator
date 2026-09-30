@@ -3,7 +3,9 @@ import { COLOR_PERIOD, type TimelineState } from '../engine/timeline';
 import { colorStepPhase, pulses, type Pulses } from '../engine/rhythm';
 import { isWall, textFrame, type TextFrame } from '../engine/text';
 import { lcm } from '../engine/math';
+import { applyBeatLoops, loopMax } from '../engine/modulation';
 import { heartRadii } from './shapes';
+import { ARM_CURVE_CODES, armShape } from './armCurves';
 import { TextLayer } from './TextLayer';
 import { averageRgb, hexToRgb, PALETTE_CYCLE, PALETTE_SAMPLES, paletteStrip, type RGB } from './color';
 import {
@@ -58,7 +60,7 @@ const TRAIL_HALF_LIVES_TO_FADE = 8;
 const TEXT_MODE = { none: 0, texture: 1, layer: 2 } as const;
 type TextMode = (typeof TEXT_MODE)[keyof typeof TEXT_MODE];
 
-const MODES = { archimedean: 0, logarithmic: 1, concentric: 2, power: 3, tunnel: 4, globe: 5 } as const;
+const MODES = { spiral: 0, concentric: 2, globe: 5 } as const;
 const SHAPES = { round: 0, polygon: 1, star: 2, heart: 3 } as const;
 /** Outline tables for the shapes without a formula. */
 const OUTLINES: Partial<Record<Settings['shape'], Float32Array>> = { heart: heartRadii() };
@@ -75,7 +77,7 @@ export function trailWeight(trails: number, dt: number): number {
 
 /** Frames to render before recording so the afterimages have built up (fade below 1/255). */
 export function trailWarmupFrames(s: Settings, fps: number): number {
-  const w = trailWeight(Math.max(s.trails, s.textEnabled ? s.textTrails : 0), 1 / fps);
+  const w = trailWeight(Math.max(loopMax(s, 'trails'), s.textEnabled ? s.textTrails : 0), 1 / fps);
   if (w <= 0) return 0;
   return Math.min(1200, Math.ceil(Math.log(1 / 255) / Math.log(w)));
 }
@@ -207,10 +209,12 @@ export class Renderer {
    * afterimage fade; 0 (e.g. a redraw while paused) shows the scene without trails.
    * `show = false` only updates the afterimages (an unsaved in-between frame of a render).
    */
-  draw(s: Settings, tl: TimelineState, dt = 0, show = true): void {
+  draw(settings: Settings, tl: TimelineState, dt = 0, show = true): void {
     if (this.lost) return;
     const gl = this.gl;
     const { width, height } = this.canvas;
+    // Everything below sees the beat-looped values.
+    const s = applyBeatLoops(settings, tl.beatPhase);
     const pulse = pulses(s, tl.beatPhase);
 
     const text = textFrame(s, tl.time, tl.beatPhase);
@@ -220,8 +224,9 @@ export class Renderer {
     // The text layer only needs keeping while it has echoes left to fade.
     const textTrail =
       s.textEnabled && s.textTrails > 0 && this.textHiddenFor <= s.textTrails * TRAIL_HALF_LIVES_TO_FADE;
-    const spiralTrail = s.trails > 0;
-    const glow = s.glow > 0;
+    // Decided from the loop's highest value, so a loop dipping to 0 doesn't reset the afterimage.
+    const spiralTrail = loopMax(settings, 'trails') > 0;
+    const glow = loopMax(settings, 'glow') > 0;
 
     gl.viewport(0, 0, width, height);
     gl.bindVertexArray(this.vao);
@@ -410,11 +415,15 @@ export class Renderer {
 
     gl.uniform2f(loc('uResolution'), width, height);
     gl.uniform1f(loc('uZoom'), s.zoom * pulses(s, tl.beatPhase).zoom);
+    gl.uniform2f(loc('uCenter'), s.centerX, s.centerY);
+    // Sampling the pattern turned back by the angle turns what's drawn forwards (anticlockwise).
+    const angle = (s.rotation * Math.PI) / 180;
+    const [cos, sin] = [Math.cos(angle), Math.sin(angle)];
+    gl.uniformMatrix2fv(loc('uRotate'), false, [cos, -sin, sin, cos]);
     gl.uniform1f(loc('uSides'), s.sides);
     gl.uniform1f(loc('uShapeDepth'), s.shapeDepth);
     const outline = OUTLINES[s.shape];
     if (outline) gl.uniform1fv(loc('uOutline[0]'), outline);
-    gl.uniform1f(loc('uExponent'), s.exponent);
     gl.uniform1f(loc('uCenterSpread'), s.centerSpread);
     gl.uniform1f(loc('uCenterTaper'), s.centerTaper);
     gl.uniform1f(loc('uSoftness'), s.softness);
@@ -424,8 +433,8 @@ export class Renderer {
     gl.uniform1f(loc('uWobblePhase'), tl.wobblePhase);
 
     const spirals = [
-      { mode: s.mode, arms: s.arms, density: s.density, flow: tl.flowPhase, mirror: s.mirror, width: s.balance },
-      { mode: s.s2Mode, arms: s.s2Arms, density: s.s2Density, flow: tl.flowPhase2, mirror: s.s2Mirror, width: s.s2Width },
+      { mode: s.mode, shape: armShape(s, false), arms: s.arms, density: s.density, flow: tl.flowPhase, mirror: s.mirror, width: s.balance },
+      { mode: s.s2Mode, shape: armShape(s, true), arms: s.s2Arms, density: s.s2Density, flow: tl.flowPhase2, mirror: s.s2Mirror, width: s.s2Width },
     ];
     spirals.forEach((sp, i) => {
       const u = `uSpiral[${i}].`;
@@ -433,6 +442,9 @@ export class Renderer {
       // (and of every colour count), keeping stripe indices stable with full float precision.
       const period = lcm(Math.round(sp.arms), COLOR_PERIOD);
       gl.uniform1i(loc(u + 'mode'), MODES[sp.mode]);
+      gl.uniform1i(loc(u + 'curve'), ARM_CURVE_CODES[sp.shape.curve]);
+      gl.uniform1f(loc(u + 'curveA'), sp.shape.a);
+      gl.uniform1f(loc(u + 'curveB'), sp.shape.b);
       gl.uniform1f(loc(u + 'arms'), sp.arms);
       gl.uniform1f(loc(u + 'density'), sp.density);
       gl.uniform1f(loc(u + 'flow'), sp.flow % period);
@@ -450,6 +462,8 @@ export class Renderer {
       s.gapShift === 0 ? 0 : s.colorStep ? step : tl.gapColorPhase,
       s.s2Shift === 0 ? 0 : s.colorStep ? step : tl.s2ColorPhase,
     ]);
+    gl.uniform1f(loc('uKaleidoTurn'), s.kaleidoSpin === 0 && !s.loops.kaleidoSpin ? 0 : tl.kaleidoPhase);
+    gl.uniform1f(loc('uKaleidoSectors'), s.kaleidoSectors);
     gl.uniform3fv(loc('uAvg1'), avg1);
     gl.uniform3fv(loc('uAvg2'), s2Avg);
 

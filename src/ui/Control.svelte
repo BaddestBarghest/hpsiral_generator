@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Button, Helper, Label, Range, Select, Textarea, Toggle } from 'flowbite-svelte';
-  import { CloseOutline, PlusOutline, UndoOutline } from 'flowbite-svelte-icons';
+  import { CloseOutline, InfoCircleOutline, PlusOutline, UndoOutline } from 'flowbite-svelte-icons';
   import { fromSlider, SLIDER_RESOLUTION, toSlider, type Param } from '../settings/schema';
   import { slide } from 'svelte/transition';
   import { dur, MEDIUM } from './motion';
@@ -16,6 +16,9 @@
     onchange,
     onbeat,
     hint = null,
+    loopTo = null,
+    loopOpen = false,
+    onloop,
   }: {
     param: Param;
     value: unknown;
@@ -23,9 +26,18 @@
     /** Tap tempo: called on every tap, which marks a beat. */
     onbeat?: () => void;
     hint?: string | null;
+    /** The other end of this setting's beat loop, or null when it doesn't loop. */
+    loopTo?: number | null;
+    /** Whether the beat loop's settings are showing. */
+    loopOpen?: boolean;
+    /** Shows the "animate with the beat" button; called when it's pressed. */
+    onloop?: () => void;
   } = $props();
 
   const id = $derived(`ctl-${param.key}`);
+
+  /** Whether the help text is showing (it hides behind the ⓘ by default). */
+  let helpOpen = $state(false);
 
   function fmt(n: number, step: number): string {
     const decimals = step >= 1 ? 0 : Math.min(3, Math.ceil(-Math.log10(step)));
@@ -82,9 +94,26 @@
 <div class="space-y-1.5">
   {#if param.type === 'range'}
     <div class="flex items-baseline justify-between">
-      <Label for={id} class="text-sm">{param.label}</Label>
+      {@render label()}
       <div class="flex items-center gap-2">
-        <span class="text-xs tabular-nums text-gray-400">{fmt(value as number, param.step)}{param.unit ? ` ${param.unit}` : ''}</span>
+        <span class="text-xs tabular-nums text-gray-400"
+          >{fmt(value as number, param.step)}{loopTo !== null ? ` ↔ ${fmt(loopTo, param.step)}` : ''}{param.unit ? ` ${param.unit}` : ''}</span
+        >
+        {#if onloop}
+          <button
+            type="button"
+            class="rounded-md border p-0.5 transition-colors hover:bg-gray-700 {loopTo !== null ? 'border-primary-500 bg-primary-500/15 text-primary-500' : 'border-gray-500 text-gray-300 hover:text-white'}"
+            onclick={onloop}
+            title={loopTo === null ? 'Animate with the beat' : loopOpen ? 'Hide animation settings' : 'Show animation settings'}
+            aria-label={`Animate ${param.label} with the beat`}
+            aria-expanded={loopOpen}
+          >
+            <!-- A wave: this value rises and falls with the beat. -->
+            <svg viewBox="0 0 16 16" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+              <path d="M1 8c1.75-5 3.75-5 5.5 0s3.75 5 5.5 0 2.25-3.5 3-3.5" />
+            </svg>
+          </button>
+        {/if}
         <!-- Always takes its space (hidden at the default) so the row doesn't shift. -->
         <button
           type="button"
@@ -131,10 +160,10 @@
       />
     {/if}
   {:else if param.type === 'select' && param.picker === 'font'}
-    <Label for={id} class="text-sm">{param.label}</Label>
+    {@render label()}
     <FontPicker {id} value={value as TextFontId} onchange={(v) => onchange(v)} />
   {:else if param.type === 'select'}
-    <Label for={id} class="text-sm">{param.label}</Label>
+    {@render label()}
     <Select
       placeholder=""
       {id}
@@ -144,11 +173,14 @@
       onchange={(e) => onchange(e.currentTarget.value)}
     />
   {:else if param.type === 'toggle'}
-    <Toggle size="small" checked={value as boolean} onchange={(e) => onchange(e.currentTarget.checked)}>
-      {param.label}
-    </Toggle>
+    <div class="flex items-center gap-1">
+      <Toggle size="small" checked={value as boolean} onchange={(e) => onchange(e.currentTarget.checked)}>
+        {param.label}
+      </Toggle>
+      {@render info()}
+    </div>
   {:else if param.type === 'textarea'}
-    <Label for={id} class="text-sm">{param.label}</Label>
+    {@render label()}
     <Textarea
       {id}
       rows={param.rows}
@@ -160,7 +192,7 @@
     />
   {:else if param.type === 'color'}
     <div class="flex items-center justify-between">
-      <Label for={id} class="text-sm">{param.label}</Label>
+      {@render label()}
       <button
         {id}
         type="button"
@@ -182,7 +214,7 @@
     {/if}
   {:else if param.type === 'palette'}
     {@const colors = value as string[]}
-    <Label class="text-sm">{param.label}</Label>
+    {@render label(false)}
     <div class="flex flex-wrap items-center gap-2">
       {#each colors as c, i (i)}
         <div class="relative">
@@ -222,7 +254,40 @@
   {/if}
   {#if hint}
     <p class="flex gap-1.5 text-xs text-amber-300" role="status"><span aria-hidden="true">⚠</span><span>{hint}</span></p>
-  {:else if param.help}
+  {/if}
+  {#if param.help && param.helpAlways}
     <Helper class="text-xs">{param.help}</Helper>
+  {:else if param.help && helpOpen}
+    <div id={`${id}-help`} transition:slide={{ duration: dur(MEDIUM) }}>
+      <Helper class="text-xs">{param.help}</Helper>
+    </div>
   {/if}
 </div>
+
+<!-- The label, with an ⓘ that shows or hides the help (kept out of sight to save room). -->
+{#snippet label(forInput = true)}
+  <div class="flex items-center gap-1">
+    {#if forInput}
+      <Label for={id} class="text-sm">{param.label}</Label>
+    {:else}
+      <Label class="text-sm">{param.label}</Label>
+    {/if}
+    {@render info()}
+  </div>
+{/snippet}
+
+{#snippet info()}
+  {#if param.help && !param.helpAlways}
+    <button
+      type="button"
+      class="rounded-full border p-0.5 transition-colors hover:bg-gray-700 {helpOpen ? 'border-primary-500 text-primary-500' : 'border-gray-500 text-gray-300 hover:text-white'}"
+      onclick={() => (helpOpen = !helpOpen)}
+      title={param.help}
+      aria-label={`About ${param.label}`}
+      aria-expanded={helpOpen}
+      aria-controls={`${id}-help`}
+    >
+      <InfoCircleOutline class="h-4 w-4" />
+    </button>
+  {/if}
+{/snippet}

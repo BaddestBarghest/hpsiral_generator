@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaults, type Settings } from '../settings/schema';
-import { exactLoop, flowPeriod, flowPeriod2, planLoop } from './loop';
+import { exactLoop, flowPeriod, flowPeriod2, kaleidoPeriod, planLoop } from './loop';
 import { beatPeriod } from './rhythm';
 import { initialTimeline, step } from './timeline';
 
@@ -25,6 +25,9 @@ function assertSeamless(s: Settings, target: number, fps: number, mode: 'exact' 
     if (s.s2Colors.length > 1) expect(offGrid(tl.s2ColorPhase, s.s2Colors.length)).toBeLessThan(1e-6);
   }
   if (s.wobble > 0) expect(offGrid(tl.wobblePhase, 1)).toBeLessThan(1e-6);
+  if (kaleidoPeriod(s) > 0 && (s.kaleidoSpin !== 0 || s.loops.kaleidoSpin)) {
+    expect(offGrid(tl.kaleidoPhase, kaleidoPeriod(s))).toBeLessThan(1e-6);
+  }
   const beats = beatPeriod(plan.settings);
   if (beats > 0) expect(offGrid(tl.beatPhase, beats)).toBeLessThan(1e-6);
   return plan;
@@ -127,26 +130,40 @@ describe('planLoop', () => {
     expect(exactLoop({ ...s, s2Enabled: false, wobble: 0 }, 30)?.seconds).toBeCloseTo(2);
   });
 
-  it('loops with a speed ramp and beat pulses', () => {
+  it('loops with a looping speed and beat pulses', () => {
     const s: Settings = {
       ...defaults(),
-      speed: 0.5,
+      speed: 0.2,
       bpm: 100,
-      rampEnabled: true,
-      rampMin: 0.4,
-      rampMax: 1.6,
-      rampBeats: 8,
+      loops: { speed: { to: 0.8, shape: 'smooth', sharpness: 0.5, peak: 0.5, beats: 8 } },
       flashMode: 'soft',
       flashRate: '1',
       zoomPulse: 0.1,
       zoomPulseRate: '2',
     };
     // Beat pattern repeats every lcm(8, 1, 2) = 8 beats = 4.8 s at 100 BPM; the flow averages
-    // 0.5 × mean(0.4, 1.6) = 0.5 cycles/s → 2 s. Exact loop = lcm(4.8 s, 2 s) = 24 s.
+    // (0.2 + 0.8) / 2 = 0.5 cycles/s → 2 s. Exact loop = lcm(4.8 s, 2 s) = 24 s.
     expect(exactLoop(s, 30)?.seconds).toBeCloseTo(24);
     assertSeamless(s, 10, 30, 'exact');
     const short = assertSeamless({ ...s, bpm: 97, speed: 0.37 }, 5, 30, 'short');
     expect(short.changes.map((c) => c.key)).toContain('bpm');
+    // Any curve and peak position loops too; the speed is nudged with both ends of its loop.
+    for (const shape of ['parabolic', 'gaussian', 'exponential'] as const) {
+      const loops = { speed: { to: 1.3, shape, sharpness: 0.7, peak: 0.3, beats: 8 } };
+      const plan = assertSeamless({ ...s, loops, bpm: 97, speed: 0.37 }, 5, 30, 'short');
+      const scale = plan.settings.speed / 0.37;
+      expect(plan.settings.loops.speed!.to).toBeCloseTo(1.3 * scale, 9);
+    }
+  });
+
+  it('loops a looping auxiliary spiral speed', () => {
+    const s: Settings = {
+      ...defaults(),
+      s2Enabled: true,
+      s2Speed: 0.13,
+      loops: { s2Speed: { to: 0.9, shape: 'exponential', sharpness: 0.6, peak: 0.7, beats: 4 } },
+    };
+    assertSeamless(s, 6, 30, 'short');
   });
 
   it('closes the text cycle', () => {
@@ -160,6 +177,43 @@ describe('planLoop', () => {
     // After the loop, the text clock is on a whole number of phrase cycles.
     const cycles = short.duration / (short.settings.textInterval * 3);
     expect(Math.abs(cycles - Math.round(cycles))).toBeLessThan(1e-9);
+  });
+
+  it('waits for a turning kaleidoscope to show the same colours again', () => {
+    const s: Settings = { ...defaults(), speed: 0.5, armColors: ['#ff0000', '#00ff00', '#0000ff'], armColorMode: 'kaleido', kaleidoSpin: -0.1 };
+    expect(kaleidoPeriod(s)).toBeCloseTo(0.5); // 3 colours = 3 of 6 sectors
+    expect(kaleidoPeriod({ ...s, gapColors: ['#000000', '#ffffff'], gapColorMode: 'kaleido' })).toBeCloseTo(1); // lcm(3, 2) = 6
+    expect(kaleidoPeriod({ ...s, armColorMode: 'static' })).toBe(0); // no kaleidoscope: turning is invisible
+    expect(kaleidoPeriod({ ...s, armColors: ['#ff0000'] })).toBe(0); // one colour: every sector looks the same
+    // Kaleidoscopic stripes on 2 arms repeat after 2 flow cycles = 4 s; half a turn at
+    // 0.1 turns/s = 5 s → lcm = 20 s.
+    expect(exactLoop(s, 30)?.seconds).toBeCloseTo(20);
+    assertSeamless(s, 10, 30, 'exact');
+    assertSeamless({ ...s, kaleidoSpin: 0.13 }, 4, 30, 'short');
+  });
+
+  it('counts sectors when working out the sector spin’s repeat', () => {
+    const s: Settings = { ...defaults(), armColors: ['#ff0000', '#00ff00', '#0000ff'], armColorMode: 'kaleido', kaleidoSpin: 0.1 };
+    expect(kaleidoPeriod({ ...s, kaleidoSectors: 9 })).toBeCloseTo(1 / 3); // 3 of 9 sectors
+    expect(kaleidoPeriod({ ...s, kaleidoSectors: 12 })).toBeCloseTo(1 / 4);
+    expect(kaleidoPeriod({ ...s, kaleidoSectors: 8 })).toBe(1); // 3 colours don't divide 8: only a whole turn
+    assertSeamless({ ...s, kaleidoSectors: 8 }, 4, 30, 'short');
+  });
+
+  it('loops a sector spin that loops with the beat', () => {
+    const s: Settings = {
+      ...defaults(),
+      speed: 0.37,
+      bpm: 97,
+      armColors: ['#ff0000', '#00ff00'],
+      armColorMode: 'kaleido',
+      kaleidoSpin: -0.05,
+      loops: { kaleidoSpin: { to: 0.4, shape: 'pulse', sharpness: 0.3, peak: 0.4, beats: 4 } },
+    };
+    const plan = assertSeamless(s, 6, 30, 'short');
+    // Nudged by scaling both ends of the loop, so its shape is kept.
+    const scale = plan.settings.kaleidoSpin / -0.05;
+    expect(plan.settings.loops.kaleidoSpin!.to).toBeCloseTo(0.4 * scale, 9);
   });
 
   it('uses the other motions when the flow is still', () => {
