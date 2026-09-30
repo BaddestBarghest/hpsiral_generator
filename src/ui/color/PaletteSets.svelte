@@ -6,17 +6,17 @@
   /** One-click colour combinations: bright colours, black and white (arms / gaps). */
   const SETS = [
     { name: 'Classic', arms: ['#ffffff'], gaps: ['#000000'] },
-    { name: 'Inverse', arms: ['#000000'], gaps: ['#ffffff'] },
-    { name: 'Gold', arms: ['#f5cb5c'], gaps: ['#000000'] },
-    { name: 'Blood', arms: ['#ff1744'], gaps: ['#000000'] },
     { name: 'Neon', arms: ['#d500f9', '#00e5ff'], gaps: ['#000000'] },
     { name: 'Toxic', arms: ['#76ff03', '#00e676'], gaps: ['#000000'] },
-    { name: 'Fire', arms: ['#ff1744', '#ff9100', '#ffea00'], gaps: ['#000000'] },
-    { name: 'Ocean', arms: ['#00e5ff', '#2979ff', '#651fff'], gaps: ['#000000'] },
-    { name: 'Rainbow', arms: ['#ff1744', '#ffea00', '#2979ff'], gaps: ['#000000'] },
-    { name: 'Candy', arms: ['#ff4081', '#ffffff'], gaps: ['#d500f9'] },
-    { name: 'Sunset', arms: ['#ff9100', '#ff4081'], gaps: ['#651fff'] },
-    { name: 'Ice', arms: ['#ffffff', '#00e5ff'], gaps: ['#2979ff'] },
+    { name: 'Hypno', arms: ['#ffffff'], gaps: ['#6200ea'] },
+    { name: 'Electric', arms: ['#ffea00'], gaps: ['#2962ff'] },
+    { name: 'Hazard', arms: ['#ffea00'], gaps: ['#000000'] },
+    { name: 'Inferno', arms: ['#ffea00', '#ff9100'], gaps: ['#d50000'] },
+    { name: 'Aurora', arms: ['#00e676', '#00e5ff', '#d500f9'], gaps: ['#000000'] },
+    { name: 'Venom', arms: ['#76ff03'], gaps: ['#d500f9'] },
+    { name: 'Bubblegum', arms: ['#ff4081', '#ffffff'], gaps: ['#00e5ff'] },
+    { name: 'Vaporwave', arms: ['#ff4081', '#00e5ff'], gaps: ['#651fff'] },
+    { name: 'Siren', arms: ['#ff1744', '#2979ff'], gaps: ['#000000'] },
   ];
 
   const same = (a: string[], b: string[]) => a.length === b.length && a.every((c, i) => c === b[i]);
