@@ -3,14 +3,35 @@
 import type { Settings } from '../settings/schema';
 
 /** Video codecs go through WebCodecs; GIF is encoded in JavaScript and works everywhere. */
-export type VideoCodec = 'avc' | 'vp9';
+export type VideoCodec = 'avc' | 'hevc' | 'av1' | 'vp9';
 export type RenderFormat = VideoCodec | 'gif';
 
-export const RENDER_FORMATS: Record<RenderFormat, { label: string; ext: 'mp4' | 'webm' | 'gif'; mimeType: string }> = {
-  avc: { label: 'MP4 (H.264)', ext: 'mp4', mimeType: 'video/mp4' },
-  vp9: { label: 'WebM (VP9)', ext: 'webm', mimeType: 'video/webm' },
-  gif: { label: 'GIF (animated)', ext: 'gif', mimeType: 'image/gif' },
+interface FormatInfo {
+  label: string;
+  ext: 'mp4' | 'webm' | 'gif';
+  mimeType: string;
+  /** Shown under the format picker. */
+  note: string;
+  /** Bitrate for the same quality, relative to H.264 (newer codecs compress better). */
+  efficiency: number;
+}
+
+export const RENDER_FORMATS: Record<RenderFormat, FormatInfo> = {
+  avc: { label: 'MP4 (H.264)', ext: 'mp4', mimeType: 'video/mp4', efficiency: 1, note: 'Plays everywhere.' },
+  hevc: {
+    label: 'MP4 (HEVC / H.265)', ext: 'mp4', mimeType: 'video/mp4', efficiency: 0.6,
+    note: 'Smaller files; plays natively on iPhones, iPads and Macs, but not in Firefox.',
+  },
+  av1: {
+    label: 'MP4 (AV1)', ext: 'mp4', mimeType: 'video/mp4', efficiency: 0.55,
+    note: 'The smallest files for the same quality; slower to render. Plays in current browsers and most apps.',
+  },
+  vp9: { label: 'WebM (VP9)', ext: 'webm', mimeType: 'video/webm', efficiency: 1, note: 'Plays in browsers; some video editors don’t open WebM.' },
+  gif: { label: 'GIF (animated)', ext: 'gif', mimeType: 'image/gif', efficiency: 1, note: 'Works everywhere, but limited to 256 colours and much larger than video.' },
 };
+
+/** Every video codec, in the order they're offered (the ones this browser can encode). */
+export const VIDEO_CODECS: VideoCodec[] = ['avc', 'hevc', 'av1', 'vp9'];
 
 export interface ResolutionPreset {
   id: string;
@@ -52,9 +73,12 @@ export const QUALITIES = [
 ] as const;
 export type QualityId = (typeof QUALITIES)[number]['id'];
 
-/** High-contrast moving stripes compress poorly, so bitrate scales with pixels per second. */
-export function estimateBitrate(width: number, height: number, fps: number, quality: QualityId): number {
-  const bpp = QUALITIES.find((q) => q.id === quality)!.bitsPerPixel;
+/**
+ * High-contrast moving stripes compress poorly, so bitrate scales with pixels per second;
+ * newer codecs need less for the same quality.
+ */
+export function estimateBitrate(width: number, height: number, fps: number, quality: QualityId, codec: VideoCodec = 'avc'): number {
+  const bpp = QUALITIES.find((q) => q.id === quality)!.bitsPerPixel * RENDER_FORMATS[codec].efficiency;
   return Math.round(Math.min(200e6, Math.max(2e6, width * height * fps * bpp)));
 }
 

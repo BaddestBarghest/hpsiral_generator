@@ -14,6 +14,8 @@ export type ToRender =
   | { type: 'viewport'; viewport: Viewport }
   | { type: 'playing'; playing: boolean }
   | { type: 'alignBeat' }
+  /** Save the next live frame as a PNG (answered with `snapshot`). */
+  | { type: 'snapshot' }
   /** The user's uploaded font file, or null when removed. */
   | { type: 'customFont'; data: ArrayBuffer | null }
   /** `output`: stream to write the file into (transferred); omitted = return the bytes. */
@@ -24,6 +26,7 @@ export type FromRender =
   | { type: 'ready' }
   | { type: 'error'; message: string }
   | { type: 'stats'; fps: number }
+  | { type: 'snapshot'; png: Blob }
   | { type: 'renderProgress'; frame: number; total: number }
   /** `buffer` is null when the file was streamed straight to disk. */
   | { type: 'renderDone'; buffer: ArrayBuffer | null }

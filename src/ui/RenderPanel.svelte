@@ -48,7 +48,9 @@
   const res = $derived(resolutions.find((r) => r.id === (isGif ? gifResId : videoResId))!);
   const fps = $derived(isGif ? gifFps : videoFps);
   const videoRes = $derived(VIDEO_RESOLUTIONS.find((r) => r.id === videoResId)!);
-  const bitrate = $derived(estimateBitrate(videoRes.width, videoRes.height, videoFps, quality));
+  const bitrate = $derived(estimateBitrate(videoRes.width, videoRes.height, videoFps, quality, isGif ? 'avc' : (format as VideoCodec)));
+  // Codecs are probed at the H.264 rate (the highest), so switching format doesn't re-probe.
+  const probeBitrate = $derived(estimateBitrate(videoRes.width, videoRes.height, videoFps, quality));
   const validDuration = $derived(Number.isFinite(duration) && duration >= 0.1 && duration <= MAX_SECONDS);
 
   const snap = $derived(loop ? $state.snapshot(settings) : null);
@@ -81,7 +83,7 @@
 
   $effect(() => {
     const { width, height } = videoRes;
-    const [f, b] = [videoFps, bitrate];
+    const [f, b] = [videoFps, probeBitrate];
     let stale = false;
     videoCodecs = null;
     import('../record/offlineRender')
@@ -126,6 +128,7 @@
       bind:value={format}
       onchange={onFormatChange}
     />
+    <Helper class="text-xs">{RENDER_FORMATS[format].note}</Helper>
   </div>
   <div class="space-y-1.5">
     <Label for="rnd-res" class="text-sm">Resolution</Label>

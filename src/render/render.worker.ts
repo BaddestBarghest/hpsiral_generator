@@ -31,6 +31,9 @@ self.onmessage = (e: MessageEvent<ToRender>) => {
       case 'alignBeat':
         loop?.alignBeat();
         break;
+      case 'snapshot':
+        loop?.snapshot();
+        break;
       case 'customFont':
         setCustomFont(msg.data);
         loop?.redraw();

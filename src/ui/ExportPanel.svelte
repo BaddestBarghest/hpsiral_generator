@@ -7,6 +7,8 @@
   import RenderPanel from './RenderPanel.svelte';
   import SectionHeading from './SectionHeading.svelte';
   import ShareLink from './ShareLink.svelte';
+  import { Button } from 'flowbite-svelte';
+  import { ImageOutline } from 'flowbite-svelte-icons';
 
   let {
     open = $bindable(),
@@ -19,6 +21,7 @@
     recording,
     elapsed,
     ontogglerecording,
+    onsnapshot,
   }: {
     open: boolean;
     width?: number;
@@ -31,6 +34,8 @@
     recording: boolean;
     elapsed: number;
     ontogglerecording: () => void;
+    /** Save the frame on screen as a PNG. */
+    onsnapshot: () => void;
   } = $props();
 </script>
 
@@ -44,6 +49,17 @@
       </p>
     </div>
     <ShareLink {settings} />
+
+    <div class="space-y-1 pt-6">
+      <SectionHeading>Snapshot</SectionHeading>
+      <p class="pt-1 text-xs text-gray-400">
+        Saves the frame on screen as a PNG image, without the controls, at the preview’s resolution (Display → Render
+        scale lowers it).
+      </p>
+    </div>
+    <Button size="sm" color="alternative" class="w-full" disabled={renderBusy} onclick={onsnapshot}>
+      <ImageOutline class="me-2 h-4 w-4" /> Save frame as PNG
+    </Button>
 
     <div class="space-y-1 pt-6">
       <SectionHeading>Render to file</SectionHeading>

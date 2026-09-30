@@ -23,6 +23,7 @@ export class RenderLoop {
   private frames = 0;
   private statsStart = 0;
   private suspended = false;
+  private snapshotWanted = false;
 
   constructor(
     canvas: AnyCanvas,
@@ -65,6 +66,29 @@ export class RenderLoop {
     this.dirty = true;
   }
 
+  /**
+   * Saves the next frame drawn as a PNG, answered with a `snapshot` event. It's captured in
+   * the same task it's drawn in, before the browser shows (and may clear) it.
+   */
+  snapshot(): void {
+    this.snapshotWanted = true;
+    this.dirty = true; // draw one even while paused
+  }
+
+  private async capture(): Promise<void> {
+    const canvas = this.renderer.canvas;
+    try {
+      const png =
+        'convertToBlob' in canvas
+          ? await canvas.convertToBlob({ type: 'image/png' })
+          : await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+      if (!png) throw new Error('The browser returned no image.');
+      this.emit({ type: 'snapshot', png });
+    } catch (err) {
+      this.emit({ type: 'error', message: `Couldn't save the frame: ${err instanceof Error ? err.message : String(err)}` });
+    }
+  }
+
   /** Freezes the live animation (e.g. during an offline render); resumes without a time jump. */
   setSuspended(s: boolean): void {
     this.suspended = s;
@@ -86,6 +110,10 @@ export class RenderLoop {
     if (this.playing) this.tl = step(this.tl, this.settings, dt);
     if (this.playing || this.dirty) {
       this.renderer.draw(this.settings, this.tl, this.playing ? dt : 0);
+      if (this.snapshotWanted) {
+        this.snapshotWanted = false;
+        void this.capture();
+      }
       this.dirty = false;
       this.countFrame(now);
     }

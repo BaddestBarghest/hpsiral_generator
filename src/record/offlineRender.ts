@@ -1,4 +1,4 @@
-// Deterministic frame-by-frame render to MP4/WebM with WebCodecs (via mediabunny).
+// Deterministic frame-by-frame render to MP4 (H.264, HEVC, AV1) or WebM (VP9) with WebCodecs (via mediabunny).
 // Loaded lazily; runs in the render worker (or on the main thread in inline mode).
 import {
   BufferTarget,
@@ -11,7 +11,7 @@ import {
   type Target,
 } from 'mediabunny';
 import { Renderer } from '../render/Renderer';
-import { frameCount, type RenderJob, type VideoCodec } from './renderJob';
+import { frameCount, RENDER_FORMATS, VIDEO_CODECS, type RenderJob, type VideoCodec } from './renderJob';
 import { RenderCancelled } from './renderErrors';
 import { advance, subSteps, warmUp } from './warmup';
 import { ensureTextFont } from '../render/fontLoader';
@@ -19,11 +19,10 @@ import { ensureTextFont } from '../render/fontLoader';
 /** Which codecs this browser can encode at the given size/rate. */
 export async function supportedCodecs(width: number, height: number, fps: number, bitrate: number): Promise<VideoCodec[]> {
   if (typeof VideoEncoder === 'undefined') return [];
-  const codecs: VideoCodec[] = ['avc', 'vp9'];
   const ok = await Promise.all(
-    codecs.map((c) => canEncodeVideo(c, { width, height, bitrate, frameRate: fps }).catch(() => false)),
+    VIDEO_CODECS.map((c) => canEncodeVideo(c, { width, height, bitrate, frameRate: fps }).catch(() => false)),
   );
-  return codecs.filter((_, i) => ok[i]);
+  return VIDEO_CODECS.filter((_, i) => ok[i]);
 }
 
 /**
@@ -44,7 +43,7 @@ export async function renderOffline(
 
   const target: Target = output ? new StreamTarget(output, { chunked: true }) : new BufferTarget();
   const format =
-    codec === 'avc'
+    RENDER_FORMATS[codec].ext === 'mp4'
       ? // Streaming can seek back to write the index at the end; in-memory puts it up front for fast playback start.
         new Mp4OutputFormat({ fastStart: output ? false : 'in-memory' })
       : new WebMOutputFormat();

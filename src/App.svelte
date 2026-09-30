@@ -136,6 +136,12 @@
       case 'error':
         error = msg.message;
         break;
+      case 'snapshot': {
+        const name = timestampedName('hypnogen-frame', 'png');
+        saveBlob(msg.png, name);
+        notice = `Saved ${name}`;
+        break;
+      }
       case 'renderProgress':
         if (rendering) Object.assign(rendering, { frame: msg.frame, total: msg.total });
         break;
@@ -417,6 +423,7 @@
     recording={!!recorder}
     elapsed={recordElapsed}
     ontogglerecording={toggleRecording}
+    onsnapshot={() => host?.snapshot()}
   />
     {/await}
   {/if}
