@@ -20,6 +20,9 @@ uniform float uOutline[128]; // heart outline radius per direction (render/shape
 #endif
 uniform float uCenterSpread; // c in rho = sqrt(r^2 + c^2); 0 = unmodified
 uniform float uCenterTaper;  // 0..1, how much arm width shrinks towards the centre
+uniform float uOuterTaper;   // 0..1, how much arm width shrinks towards the edge
+uniform float uGradientScale; // gradient colour mode: palette steps per unit of distance from centre
+uniform float uGlobeTilt;    // globe: spin axis tipped towards the viewer (radians), so a pole shows
 uniform float uSoftness;     // 0..1, extra edge blur
 uniform float uTwist;        // turns of extra rotation per unit of distance
 uniform float uWobble;       // 0..1 ripple amplitude
@@ -62,12 +65,14 @@ uniform float uHueShift;     // radians
 #endif
 
 const float TAU = 6.283185307179586;
-const float GRADIENT_SCALE = 1.5; // palette steps per unit of distance from centre
+
 const float TAPER_RADIUS = 1.0;   // arms reach full width at this distance (short screen half = 1)
+const float OUTER_TAPER_START = 0.2; // outer taper: arms start thinning here...
+const float OUTER_TAPER_END = 1.9;   // ...and are thinnest here, about a wide screen's corner
 const float WOBBLE_TURNS = 0.15;  // arm displacement at full wobble, in turns
 const float TUNNEL_DEPTH = 0.5;   // inverse curve: rings per unit of density at distance 1 (they crowd towards the centre)
 const float GLOBE_RADIUS = 0.9;   // globe: size (short screen half = 1)
-const float GLOBE_TILT = 0.5;     // globe: spin axis tipped towards the viewer (radians), so a pole shows
+
 const float GLOBE_WIND = 0.3;     // globe: how tightly the stripes wind towards the poles, per unit of density
 const vec3 GLOBE_LIGHT = vec3(-0.36, 0.46, 0.81); // globe: light from the upper left, towards the viewer (unit length)
 
@@ -157,7 +162,7 @@ Field spiralField(vec2 p, Spiral sp, float pixel) {
     // meridian at the same angle), converging on the poles.
     vec2 q = p / GLOBE_RADIUS;
     vec3 n = vec3(q, sqrt(max(1.0 - dot(q, q), 0.0)));
-    float ct = cos(GLOBE_TILT), st = sin(GLOBE_TILT);
+    float ct = cos(uGlobeTilt), st = sin(uGlobeTilt);
     vec3 w = vec3(n.x, ct * n.y + st * n.z, -st * n.y + ct * n.z); // spin axis = w.y
     vec2 u = normalize(vec2(w.x, w.z) + 1e-6);                       // (cos, sin) of longitude
     float lon = atan(u.y, u.x) * sp.mirror;
@@ -231,7 +236,9 @@ Field spiralField(vec2 p, Spiral sp, float pixel) {
 
 float armWidth(Spiral sp, float r) {
   float taper = pow(clamp(r / TAPER_RADIUS, 0.0, 1.0), 0.6);
-  return sp.width * (1.0 - uCenterTaper * (1.0 - taper));
+  // Outer taper: thins from OUTER_TAPER_START out to nothing by the screen's corners.
+  float outer = smoothstep(OUTER_TAPER_START, OUTER_TAPER_END, r);
+  return sp.width * (1.0 - uCenterTaper * (1.0 - taper)) * (1.0 - uOuterTaper * outer);
 }
 
 float filterWidth(float dv, float baseWidth) {
@@ -281,7 +288,7 @@ void main() {
   float b = armWidth(s1, F.r);
   float armK, gapK;
   float cov = coverage(s1, F, b, armK, gapK);
-  float g = F.rho * GRADIENT_SCALE;
+  float g = F.rho * uGradientScale;
   float sector = kaleidoSector(F.theta, s1.mirror);
   vec3 col = mix(bandColor(1, s1, gapK, g, sector), bandColor(0, s1, armK, g, sector), cov);
   // Where a whole cycle shrinks to ~1-2px, fade to the average colour instead of moiré.
@@ -297,7 +304,7 @@ void main() {
     float fade2 = smoothstep(0.6, 1.0, F2.dv);
     float armK2, gapK2;
     float cov2 = mix(coverage(s2, F2, b2, armK2, gapK2), b2 * F2.inside, fade2);
-    vec3 c2 = mix(bandColor(2, s2, armK2, F2.rho * GRADIENT_SCALE, kaleidoSector(F2.theta, s2.mirror)), uAvg2, fade2) * F2.shade;
+    vec3 c2 = mix(bandColor(2, s2, armK2, F2.rho * uGradientScale, kaleidoSector(F2.theta, s2.mirror)), uAvg2, fade2) * F2.shade;
     col = blend(col, c2, cov2 * uS2Opacity, uS2Blend);
   }
 #endif

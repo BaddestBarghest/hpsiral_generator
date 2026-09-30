@@ -5,7 +5,7 @@ A hypnotic spiral generator that runs in the browser. It renders with WebGL2 on 
 > ⚠️ **Photosensitivity warning:** this app shows moving patterns and changing colours that may trigger seizures in people with photosensitive epilepsy.
 
 ## Features
-- Spiral, concentric and globe patterns. A spiral's arm curve sets how tightly it winds with distance: linear (Archimedean), logarithmic, power law, inverse (tunnel), exponential or ripple, each with its own settings and a live preview of the arms. Controls: arms, density, center spread, center taper (pointy core), arm width, softness, zoom, speed and direction.
+- Spiral, concentric and globe patterns. A spiral's arm curve sets how tightly it winds with distance: linear (Archimedean), logarithmic, power law, inverse (tunnel), exponential or ripple, each with its own settings and a live preview of the arms. Controls: arms, density, center spread, center taper (pointy core), outer taper, arm width, softness, zoom, speed and direction. The globe's tilt is adjustable, and so is how quickly gradient colours run along the arm.
 - Round or polygon (3–12 sides) shapes for every pattern
 - An auxiliary spiral drawn over the main one, with its own pattern, arms, density, speed, direction and 1–3 colours, plus opacity and blend modes (normal, add, multiply, screen, difference)
 - Effects: twist, wobble, afterimage trails (time-based, so the same at any frame rate; renders pre-roll so trails and loops stay seamless) and vignette

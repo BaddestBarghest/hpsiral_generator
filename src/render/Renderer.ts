@@ -426,6 +426,9 @@ export class Renderer {
     if (outline) gl.uniform1fv(loc('uOutline[0]'), outline);
     gl.uniform1f(loc('uCenterSpread'), s.centerSpread);
     gl.uniform1f(loc('uCenterTaper'), s.centerTaper);
+    gl.uniform1f(loc('uOuterTaper'), s.outerTaper);
+    gl.uniform1f(loc('uGradientScale'), s.gradientScale);
+    gl.uniform1f(loc('uGlobeTilt'), (s.globeTilt * Math.PI) / 180);
     gl.uniform1f(loc('uSoftness'), s.softness);
     gl.uniform1f(loc('uTwist'), s.twist);
     gl.uniform1f(loc('uWobble'), s.wobble);

@@ -144,6 +144,7 @@ export const schema = [
   { key: 'curveGrowth', group: 'Spiral', section: 'Shape', ...GROWTH, showIf: { mode: ['spiral'], armCurve: ['exponential'] } },
   { key: 'rippleAmount', group: 'Spiral', section: 'Shape', ...RIPPLE_AMOUNT, showIf: { mode: ['spiral'], armCurve: ['ripple'] } },
   { key: 'rippleCount', group: 'Spiral', section: 'Shape', ...RIPPLE_COUNT, showIf: { mode: ['spiral'], armCurve: ['ripple'] } },
+  { key: 'globeTilt', label: 'Globe tilt', group: 'Spiral', section: 'Shape', type: 'range', min: -90, max: 90, step: 1, default: 29, unit: '°', help: 'Tips the globe’s spin axis towards you: 0 = seen side on, 90 = looking straight down at a pole. Applies to both spirals.', showIf: eitherSpiral(['globe']) },
   {
     key: 'shape', label: 'Shape', group: 'Spiral', section: 'Shape', type: 'select', default: 'round', help: 'Applies to both spirals (not to the globe).',
     showIf: eitherSpiral(FLAT_MODES),
@@ -160,6 +161,7 @@ export const schema = [
   { key: 'density', label: 'Density', group: 'Spiral', section: 'Shape', type: 'range', min: 0.5, max: 30, step: 0.1, default: 10, curve: 'log' },
   { key: 'centerSpread', label: 'Center spread', group: 'Spiral', section: 'Shape', type: 'range', min: 0, max: 0.6, step: 0.01, default: 0, help: 'Widens the stripes near the middle so they don’t bunch up. Applies to both spirals.', showIf: eitherSpiral(FLAT_MODES) },
   { key: 'centerTaper', label: 'Center taper', group: 'Spiral', section: 'Shape', type: 'range', min: 0, max: 1, step: 0.01, default: 0.6, help: 'Thins the arms towards the middle. Higher = pointier core, 0 = constant width.' },
+  { key: 'outerTaper', label: 'Outer taper', group: 'Spiral', section: 'Shape', type: 'range', min: 0, max: 1, step: 0.01, default: 0, help: 'Thins the arms towards the edge; at 1 they fade to nothing by the screen’s corners.' },
   { key: 'balance', label: 'Arm width', group: 'Spiral', section: 'Shape', type: 'range', min: 0.05, max: 0.95, step: 0.01, default: 0.5, help: 'Share of each cycle taken by the arm; the rest is the gap.' },
   { key: 'softness', label: 'Edge softness', group: 'Spiral', section: 'Shape', type: 'range', min: 0, max: 1, step: 0.01, default: 0 },
   { key: 'zoom', label: 'Zoom', group: 'Spiral', section: 'Shape', type: 'range', loopable: true, min: 0.25, max: 4, step: 0.01, default: 1, curve: 'log' },
@@ -184,6 +186,11 @@ export const schema = [
   { key: 'gapColors', label: 'Colours', group: 'Colour', section: 'Gaps', type: 'palette', minColors: 1, maxColors: MAX_BAND_COLORS, default: ['#000000'] },
   { key: 'gapColorMode', label: 'Colour mode', group: 'Colour', section: 'Gaps', type: 'select', default: 'static', options: COLOR_MODES },
   { key: 'gapShift', label: 'Colour shift speed', group: 'Colour', section: 'Gaps', type: 'range', min: 0, max: 2, step: 0.01, default: 0, unit: 'cycles/s', curve: 'sq' },
+  {
+    key: 'gradientScale', label: 'Gradient scale', group: 'Colour', section: 'Gradient', type: 'range', min: 0.2, max: 6, step: 0.05, default: 1.5, curve: 'log',
+    help: 'How quickly “Gradient along the arm” runs through the colours: higher = shorter gradients that repeat more often. Applies to every colour list set to Gradient.',
+    showIf: [{ armColorMode: ['gradient'] }, { gapColorMode: ['gradient'] }, { s2Enabled: ['true'], s2ColorMode: ['gradient'] }],
+  },
   {
     key: 'kaleidoSpin', label: 'Sector spin', group: 'Colour', section: 'Colour sectors', type: 'range', loopable: true, min: -0.5, max: 0.5, step: 0.01, default: 0, unit: 'turns/s',
     help: 'Turns the coloured slices made by the Kaleidoscopic colour mode around the centre; the stripes themselves don’t move. Negative turns them clockwise.',
