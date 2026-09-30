@@ -5,7 +5,8 @@
   /**
    * Picture of a spiral's arms out to the edge of the screen's short side: the centre line of
    * each arm, where the pattern coordinate is whole (see spiralField in scene.frag.glsl).
-   * Ignores the outline shape, wobble and zoom; it's about how the arms wind.
+   * Follows the rotation; ignores the outline shape, wobble, position and zoom, since it's
+   * about how the arms wind.
    */
   let { settings, s2 = false }: { settings: Settings; s2?: boolean } = $props();
 
@@ -18,11 +19,12 @@
     const density = s2 ? settings.s2Density : settings.density;
     const mirror = (s2 ? settings.s2Mirror : settings.mirror) ? -1 : 1;
     const c = settings.centerSpread;
+    const turn = (settings.rotation * Math.PI) / 180;
     // The pattern is arms·θ/2π + density·f(ρ) + arms·twist·ρ; an arm's centre keeps it constant.
     const angle = (r: number, arm: number) => {
       const rho = Math.sqrt(r * r + c * c);
       const v = density * armRadial(shape, rho, c) + arms * settings.twist * rho;
-      return (mirror * 2 * Math.PI * (arm - v)) / arms;
+      return (mirror * 2 * Math.PI * (arm - v)) / arms + turn;
     };
     const out: string[] = [];
     for (let arm = 0; arm < arms; arm++) {
