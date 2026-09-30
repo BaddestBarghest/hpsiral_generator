@@ -2,6 +2,7 @@ import type { Settings } from '../settings/schema';
 import { initialTimeline, step, type TimelineState } from '../engine/timeline';
 import { trailWarmupFrames, type Renderer } from '../render/Renderer';
 import { loopMax } from '../engine/modulation';
+import { sequenceLooks } from '../engine/sequence';
 
 /**
  * Afterimages are built by feedback, one blend per drawn frame. At low frame rates (GIFs,
@@ -11,9 +12,9 @@ import { loopMax } from '../engine/modulation';
  */
 const TRAIL_RATE = 60;
 
-/** Feedback steps per output frame: 1 without afterimages, else enough to reach TRAIL_RATE. */
+/** Feedback steps per output frame: 1 without afterimages (in any scene), else enough to reach TRAIL_RATE. */
 export function subSteps(settings: Settings, fps: number): number {
-  const trails = loopMax(settings, 'trails') > 0 || (settings.textEnabled && settings.textTrails > 0);
+  const trails = sequenceLooks(settings).some((s) => loopMax(s, 'trails') > 0 || (s.textEnabled && s.textTrails > 0));
   return trails ? Math.max(1, Math.ceil(TRAIL_RATE / fps - 1e-9)) : 1;
 }
 
@@ -36,6 +37,7 @@ export function advance(renderer: Renderer, settings: Settings, tl: TimelineStat
  * Renders (without recording) enough frames for afterimage trails to build up, so the
  * first recorded frame already looks like live playback. Returns the timeline to start
  * recording from. Loops stay seamless: a loop is periodic, so any start point works.
+ * A sequence stays on its first scene meanwhile, so the recording starts at its start.
  */
 export function warmUp(renderer: Renderer, settings: Settings, fps: number): TimelineState {
   const rate = fps * subSteps(settings, fps);
@@ -43,7 +45,7 @@ export function warmUp(renderer: Renderer, settings: Settings, fps: number): Tim
   let tl = initialTimeline();
   for (let i = trailWarmupFrames(settings, rate); i > 0; i--) {
     renderer.draw(settings, tl, dt, false);
-    tl = step(tl, settings, dt);
+    tl = { ...step(tl, settings, dt), seqPos: 0 };
   }
   return tl;
 }

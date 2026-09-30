@@ -1,6 +1,7 @@
 import type { Settings } from '../settings/schema';
 import { LiveClock } from '../engine/clock';
 import { alignBeat, initialTimeline, step, type TimelineState } from '../engine/timeline';
+import { sceneStart, sequenceActive, sequencePlace } from '../engine/sequence';
 import { Renderer } from './Renderer';
 import type { AnyCanvas } from './gl';
 import type { Emit, Viewport } from './protocol';
@@ -24,6 +25,8 @@ export class RenderLoop {
   private statsStart = 0;
   private suspended = false;
   private snapshotWanted = false;
+  /** Scene (and fade) last reported to the UI. */
+  private sceneKey = '';
 
   constructor(
     canvas: AnyCanvas,
@@ -34,14 +37,41 @@ export class RenderLoop {
   ) {
     this.renderer = new Renderer(canvas, () => (this.dirty = true));
     this.applySize();
+    this.reportScene();
     this.frameId = raf(this.frame);
   }
 
   setSettings(s: Settings): void {
-    const sizeChanged = s.renderScale !== this.settings.renderScale || s.maxDpr !== this.settings.maxDpr;
+    const old = this.settings;
+    const sizeChanged = s.renderScale !== old.renderScale || s.maxDpr !== old.maxDpr;
     this.settings = s;
     if (sizeChanged) this.applySize();
+    if (sequenceActive(s)) {
+      // A sequence starts from its first scene; a change of unit keeps the scene showing.
+      if (!sequenceActive(old)) this.tl = { ...this.tl, seqPos: 0 };
+      else if (s.sequence.unit !== old.sequence.unit) {
+        const { scene } = sequencePlace(old.sequence, this.tl.seqPos);
+        this.tl = { ...this.tl, seqPos: sceneStart(s.sequence, scene) };
+      }
+    }
+    this.reportScene();
     this.dirty = true;
+  }
+
+  /** Jumps to the start of scene `index` of the sequence. */
+  seekScene(index: number): void {
+    this.tl = { ...this.tl, seqPos: sceneStart(this.settings.sequence, index) };
+    this.reportScene();
+    this.dirty = true;
+  }
+
+  /** Tells the UI which scene shows, when that changed. */
+  private reportScene(): void {
+    const place = sequenceActive(this.settings) ? sequencePlace(this.settings.sequence, this.tl.seqPos) : { scene: -1, next: -1 };
+    const key = `${place.scene}>${place.next}`;
+    if (key === this.sceneKey) return;
+    this.sceneKey = key;
+    this.emit({ type: 'sequence', scene: place.scene, next: place.next });
   }
 
   setViewport(v: Viewport): void {
@@ -107,7 +137,10 @@ export class RenderLoop {
     if (this.suspended) return;
     const dt = this.clock.tick(now, Number(this.settings.maxFps));
     if (dt === null) return;
-    if (this.playing) this.tl = step(this.tl, this.settings, dt);
+    if (this.playing) {
+      this.tl = step(this.tl, this.settings, dt);
+      this.reportScene();
+    }
     if (this.playing || this.dirty) {
       this.renderer.draw(this.settings, this.tl, this.playing ? dt : 0);
       if (this.snapshotWanted) {

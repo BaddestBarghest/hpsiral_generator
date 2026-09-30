@@ -1,4 +1,4 @@
-import { schema, settingsFromJson, withVersion, type Param, type Settings } from './schema';
+import { DEVICE_KEYS, settingsFromJson, withVersion, type Settings } from './schema';
 
 /**
  * Share links: the settings travel in the URL's hash (`#s=…`), compressed. The hash never
@@ -10,9 +10,6 @@ const PREFIX = 's=';
 /** Code formats: deflate-compressed, or plain JSON where the browser can't compress. */
 const DEFLATE = '1.';
 const PLAIN = '0.';
-
-/** Settings that belong to the viewer's device rather than the look (the Display tab). */
-export const DEVICE_KEYS = (schema as readonly Param[]).filter((p) => p.group === 'Display').map((p) => p.key as keyof Settings);
 
 function toBase64Url(bytes: Uint8Array): string {
   let bin = '';

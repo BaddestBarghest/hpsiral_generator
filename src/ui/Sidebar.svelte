@@ -1,7 +1,9 @@
 <script lang="ts" module>
   import type { Group } from '../settings/schema';
+  /** The settings groups, plus the sequence (which isn't a group of settings). */
+  type Tab = Group | 'Sequence';
   /** Last tab shown; survives the panel closing or the controls being hidden (per page load). */
-  let lastTab: Group = 'Spiral';
+  let lastTab: Tab = 'Spiral';
 </script>
 
 <script lang="ts">
@@ -17,6 +19,7 @@
   import PaletteSets from './color/PaletteSets.svelte';
   import BeatLoopEditor from './BeatLoopEditor.svelte';
   import ArmPreview from './ArmPreview.svelte';
+  import SequenceEditor from './SequenceEditor.svelte';
   import { autoShiftFor, hintFor } from './hints';
   import { readStored, writeStored } from '../storage';
 
@@ -28,6 +31,8 @@
     onsave,
     onload,
     onbeat,
+    sequenceAt,
+    onseek,
   }: {
     open: boolean;
     width?: number;
@@ -39,10 +44,17 @@
     onload: (file: File) => void;
     /** Tap tempo marked a beat. */
     onbeat: () => void;
+    /** Scene showing and scene being faded into (-1 when stopped). */
+    sequenceAt: { scene: number; next: number };
+    /** Jump to the start of a scene. */
+    onseek: (index: number) => void;
   } = $props();
 
   const params = schema as readonly Param[];
   const byGroup = Object.fromEntries(groups.map((g) => [g, params.filter((p) => p.group === g)]));
+  // Sequence sits before Display, which is about this device rather than the look.
+  const tabs: Tab[] = [...groups.filter((g) => g !== 'Display'), 'Sequence', 'Display'];
+  const sequencePlaying = $derived(settings.sequence.enabled && settings.sequence.scenes.length > 0);
 
   // Compact underline tabs; the bar scrolls sideways (wheel, arrows, or swipe) when they don't fit.
   const tabBase = 'whitespace-nowrap border-b-2 bg-transparent px-1.5 py-3 text-sm transition-colors duration-200';
@@ -50,9 +62,9 @@
   const inactiveTab = `${tabBase} border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-200`;
 
   // Which tab is open, starting from the one shown last time.
-  const tabOpen = $state(Object.fromEntries(groups.map((g) => [g, g === lastTab])) as Record<Group, boolean>);
+  const tabOpen = $state(Object.fromEntries(tabs.map((g) => [g, g === lastTab])) as Record<Tab, boolean>);
   $effect(() => {
-    const shown = groups.find((g) => tabOpen[g]);
+    const shown = tabs.find((g) => tabOpen[g]);
     if (shown) lastTab = shown;
   });
 
@@ -127,7 +139,7 @@
 
   // Keep the open tab in view (e.g. when the panel reopens on a tab that was scrolled away).
   $effect(() => {
-    void groups.map((g) => tabOpen[g]);
+    void tabs.map((g) => tabOpen[g]);
     void tick().then(() =>
       bar?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }),
     );
@@ -192,11 +204,23 @@
     ulClass="no-scrollbar me-2 flex shrink-0 space-x-0 overflow-x-auto scroll-smooth"
     contentClass="settings-scroll relative mt-0 min-h-0 flex-1 overflow-y-auto rounded-none bg-transparent py-4 ps-0 pe-3"
   >
-    {#each groups as group (group)}
-      <TabItem bind:open={tabOpen[group]} title={group} activeClass={activeTab} inactiveClass={inactiveTab}>
+    {#each tabs as tab (tab)}
+      <TabItem bind:open={tabOpen[tab]} title={tab} activeClass={activeTab} inactiveClass={inactiveTab}>
+        {#if tab === 'Sequence'}
+          <div in:fly|global={{ y: 8, duration: dur(MEDIUM) }}>
+            <SequenceEditor {settings} current={sequenceAt} {onseek} />
+          </div>
+        {:else}
+        {@const group = tab}
         <!-- Headings come from visible controls only, so a section with nothing to show disappears. -->
         {@const visible = byGroup[group].filter((p) => isVisible(p, settings))}
         <div class="space-y-3" in:fly|global={{ y: 8, duration: dur(MEDIUM) }}>
+          {#if sequencePlaying && group !== 'Display'}
+            <div class="flex items-center gap-2 rounded-md border border-primary-500/40 bg-primary-500/10 p-2 text-xs text-gray-200" role="status">
+              <span class="flex-1">A sequence is playing, so changes here won’t show until you stop it.</span>
+              <Button size="xs" color="alternative" class="shrink-0" onclick={() => (settings.sequence.enabled = false)}>Stop</Button>
+            </div>
+          {/if}
           {#if group === 'Colour'}
             <PaletteSets {settings} />
           {/if}
@@ -245,6 +269,7 @@
             {/if}
           {/each}
         </div>
+        {/if}
       </TabItem>
     {/each}
   </Tabs>

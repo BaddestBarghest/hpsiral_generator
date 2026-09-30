@@ -1,6 +1,7 @@
 import { BOLD_FONT_IDS, CUSTOM_FONT_ID, fontFamily, type TextFontId } from '../settings/fonts';
 import type { Settings } from '../settings/schema';
 import { FONT_FILES } from './fontFiles';
+import { sequenceLooks } from '../engine/sequence';
 
 /** Used while a font downloads, or if loading fails. */
 const FALLBACK = 'system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
@@ -78,9 +79,13 @@ export function canvasFont(id: TextFontId, weight: 400 | 700, px: number): strin
   return isFontReady(id, weight) ? `${weight} ${px}px "${familyName(id, weight)}", ${FALLBACK}` : `${weight} ${px}px ${FALLBACK}`;
 }
 
-/** Makes sure the text font is ready before an offline render starts drawing frames. */
-export async function ensureTextFont(s: Settings): Promise<void> {
-  if (s.textEnabled) await loadFont(s.textFont, fontWeight(s.textFont, s.textBold));
+/** Makes sure the text fonts (every scene's, in a sequence) are ready before an offline render starts drawing frames. */
+export async function ensureTextFont(settings: Settings): Promise<void> {
+  await Promise.all(
+    sequenceLooks(settings)
+      .filter((s) => s.textEnabled)
+      .map((s) => loadFont(s.textFont, fontWeight(s.textFont, s.textBold))),
+  );
 }
 
 /** Checks that `data` is a font the browser can use (for validating uploads). */

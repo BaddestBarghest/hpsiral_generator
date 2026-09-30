@@ -4,6 +4,7 @@ import { colorStepPhase, pulses, type Pulses } from '../engine/rhythm';
 import { isWall, textFrame, type TextFrame } from '../engine/text';
 import { lcm } from '../engine/math';
 import { applyBeatLoops, loopMax } from '../engine/modulation';
+import { resolveSequence, sequenceActive } from '../engine/sequence';
 import { heartRadii } from './shapes';
 import { ARM_CURVE_CODES, armShape } from './armCurves';
 import { TextLayer } from './TextLayer';
@@ -76,7 +77,8 @@ export function trailWeight(trails: number, dt: number): number {
 }
 
 /** Frames to render before recording so the afterimages have built up (fade below 1/255). */
-export function trailWarmupFrames(s: Settings, fps: number): number {
+export function trailWarmupFrames(live: Settings, fps: number): number {
+  const s = resolveSequence(live, 0); // renders start at the first scene
   const w = trailWeight(Math.max(loopMax(s, 'trails'), s.textEnabled ? s.textTrails : 0), 1 / fps);
   if (w <= 0) return 0;
   return Math.min(1200, Math.ceil(Math.log(1 / 255) / Math.log(w)));
@@ -209,11 +211,12 @@ export class Renderer {
    * afterimage fade; 0 (e.g. a redraw while paused) shows the scene without trails.
    * `show = false` only updates the afterimages (an unsaved in-between frame of a render).
    */
-  draw(settings: Settings, tl: TimelineState, dt = 0, show = true): void {
+  draw(live: Settings, tl: TimelineState, dt = 0, show = true): void {
     if (this.lost) return;
     const gl = this.gl;
     const { width, height } = this.canvas;
-    // Everything below sees the beat-looped values.
+    // The scene showing when a sequence plays; everything below sees the beat-looped values.
+    const settings = resolveSequence(live, tl.seqPos);
     const s = applyBeatLoops(settings, tl.beatPhase);
     const pulse = pulses(s, tl.beatPhase);
 
@@ -457,15 +460,16 @@ export class Renderer {
 
     gl.uniform1iv(loc('uColorMode'), [s.armColorMode, s.gapColorMode, s.s2ColorMode].map((m) => COLOR_MODES[m]));
     // A speed of 0 means your exact colours, even while paused (the timeline only resets
-    // these phases when it advances).
+    // these phases when it advances). In a sequence the timeline eases them back instead.
+    const still = (speed: number) => speed === 0 && !sequenceActive(s);
     // Beat-locked: every shifting palette moves one whole colour per step, on the beat.
     const step = s.colorStep ? colorStepPhase(s, tl.beatPhase) : 0;
     gl.uniform1fv(loc('uShift'), [
-      s.armShift === 0 ? 0 : s.colorStep ? step : tl.armColorPhase,
-      s.gapShift === 0 ? 0 : s.colorStep ? step : tl.gapColorPhase,
-      s.s2Shift === 0 ? 0 : s.colorStep ? step : tl.s2ColorPhase,
+      still(s.armShift) ? 0 : s.colorStep && s.armShift !== 0 ? step : tl.armColorPhase,
+      still(s.gapShift) ? 0 : s.colorStep && s.gapShift !== 0 ? step : tl.gapColorPhase,
+      still(s.s2Shift) ? 0 : s.colorStep && s.s2Shift !== 0 ? step : tl.s2ColorPhase,
     ]);
-    gl.uniform1f(loc('uKaleidoTurn'), s.kaleidoSpin === 0 && !s.loops.kaleidoSpin ? 0 : tl.kaleidoPhase);
+    gl.uniform1f(loc('uKaleidoTurn'), still(s.kaleidoSpin) && !s.loops.kaleidoSpin ? 0 : tl.kaleidoPhase);
     gl.uniform1f(loc('uKaleidoSectors'), s.kaleidoSectors);
     gl.uniform3fv(loc('uAvg1'), avg1);
     gl.uniform3fv(loc('uAvg2'), s2Avg);
@@ -474,7 +478,7 @@ export class Renderer {
     gl.uniform1i(loc('uS2Blend'), BLENDS[s.s2Blend]);
 
 
-    gl.uniform1f(loc('uHueShift'), s.hueRoll === 0 ? 0 : tl.huePhase * Math.PI * 2);
+    gl.uniform1f(loc('uHueShift'), still(s.hueRoll) ? 0 : tl.huePhase * Math.PI * 2);
   }
 
   /**

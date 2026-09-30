@@ -57,6 +57,8 @@
   let uiHidden = $state(false);
   let isFullscreen = $state(false);
   let fps = $state(0);
+  /** Scene the sequence shows and the one it's fading into (-1 when stopped). */
+  let sequenceAt = $state({ scene: -1, next: -1 });
   let renderMode = $state<'worker' | 'inline' | ''>('');
   let error = $state<string | null>(null);
   let notice = $state<string | null>(null);
@@ -132,6 +134,9 @@
     switch (msg.type) {
       case 'stats':
         fps = Math.round(msg.fps);
+        break;
+      case 'sequence':
+        sequenceAt = { scene: msg.scene, next: msg.next };
         break;
       case 'error':
         error = msg.message;
@@ -408,7 +413,7 @@
     </Button>
   </div>
 
-  <Sidebar bind:open={drawerOpen} bind:width={drawerWidth} {settings} onreset={resetSettings} onsave={saveSettings} onload={loadSettings} onbeat={() => host?.alignBeat()} />
+  <Sidebar bind:open={drawerOpen} bind:width={drawerWidth} {settings} onreset={resetSettings} onsave={saveSettings} onload={loadSettings} onbeat={() => host?.alignBeat()} {sequenceAt} onseek={(i) => host?.seekScene(i)} />
   <!-- Loaded the first time it's opened (render/record settings, loop planner). -->
   {#if exportUsed}
     {#await import('./ui/ExportPanel.svelte') then { default: ExportPanel }}

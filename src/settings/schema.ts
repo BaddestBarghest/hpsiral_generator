@@ -368,11 +368,53 @@ export const LOOP_BEATS = [2, 4, 8, 16, 32, 64] as const;
 
 export type BeatLoops = Partial<Record<LoopableKey, BeatLoop>>;
 
-/** Every setting in the schema, plus the beat loops (which are stored per setting). */
-export type Settings = SchemaSettings & { loops: BeatLoops };
+/** Every setting in the schema, plus the beat loops (stored per setting) and the scene sequence. */
+export type Settings = SchemaSettings & { loops: BeatLoops; sequence: Sequence };
 export type SettingKey = keyof Settings;
 
+/** Everything a scene remembers: all the settings but the sequence itself. */
+export type Look = Omit<Settings, 'sequence'>;
+
+/**
+ * One step of a sequence: a saved look shown for `hold`, then blended into the next scene
+ * over `fade` (both in the sequence's unit).
+ */
+export interface Scene {
+  name: string;
+  look: Look;
+  hold: number;
+  fade: number;
+}
+
+export type SequenceUnit = 'seconds' | 'beats';
+
+/** Scenes played in order in place of the controls' own look (see engine/sequence.ts). */
+export interface Sequence {
+  /** Playing: the scenes are shown instead of the controls. */
+  enabled: boolean;
+  unit: SequenceUnit;
+  /** After the last scene, fade back into the first; otherwise stay on the last. */
+  loop: boolean;
+  scenes: Scene[];
+}
+
+export const MAX_SCENES = 24;
+export const MAX_SCENE_NAME = 40;
+/** Longest hold or fade, in either unit. */
+export const MAX_SCENE_TIME = 3600;
+
+export const emptySequence = (): Sequence => ({ enabled: false, unit: 'seconds', loop: true, scenes: [] });
+
+/** A look (all settings but the sequence) taken from `s`. */
+export function lookOf(s: Settings): Look {
+  const { sequence: _, ...look } = s;
+  return look;
+}
+
 export const groups: Group[] = ['Spiral', 'Colour', 'Aux. spiral', 'Rhythm', 'Text', 'Display'];
+
+/** Settings that belong to the viewer's device rather than the look (the Display tab). */
+export const DEVICE_KEYS = (schema as readonly Param[]).filter((p) => p.group === 'Display').map((p) => p.key as keyof Look);
 
 export function defaults(): Settings {
   const out: Record<string, unknown> = {};
@@ -380,6 +422,7 @@ export function defaults(): Settings {
     out[p.key] = p.type === 'palette' ? [...p.default] : p.default;
   }
   out.loops = {};
+  out.sequence = emptySequence();
   return out as Settings;
 }
 
@@ -479,7 +522,7 @@ export function settingsFromJson(text: string): Settings {
     throw new Error("That file isn't a settings file (it isn't valid JSON).");
   }
   const obj = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
-  if (!obj || !(schema as readonly Param[]).some((p) => p.key in obj)) {
+  if (!obj || !((schema as readonly Param[]).some((p) => p.key in obj) || 'sequence' in obj)) {
     throw new Error("That file doesn't contain any HypnoGenerator settings.");
   }
   return sanitize(migrate(obj));
@@ -497,6 +540,14 @@ export function migrate(input: unknown): unknown {
   }
   if (version < 3 && raw.rampEnabled === true) raw = migrateSpeedRamp(raw);
   if (version < 4) raw = migrateArmCurves(raw);
+  // Scenes were saved with the same version as the settings around them.
+  const seq = raw.sequence as { scenes?: unknown } | undefined;
+  if (seq && typeof seq === 'object' && Array.isArray(seq.scenes)) {
+    const scenes = seq.scenes.map((sc: unknown) =>
+      sc && typeof sc === 'object' && 'look' in sc ? { ...sc, look: migrate({ ...(sc.look as object), version }) } : sc,
+    );
+    raw = { ...raw, sequence: { ...seq, scenes } };
+  }
   return raw;
 }
 
@@ -576,5 +627,28 @@ export function sanitize(input: unknown): Settings {
     }
   }
   out.loops = sanitizeLoops(src.loops);
+  out.sequence = sanitizeSequence(src.sequence);
   return out as Settings;
+}
+
+function sanitizeSequence(input: unknown): Sequence {
+  const src = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+  const time = (v: unknown, fallback: number) =>
+    typeof v === 'number' && Number.isFinite(v) ? Math.min(MAX_SCENE_TIME, Math.max(0, v)) : fallback;
+  const scenes = (Array.isArray(src.scenes) ? src.scenes : [])
+    .filter((sc): sc is Record<string, unknown> => !!sc && typeof sc === 'object' && !!(sc as Record<string, unknown>).look)
+    .slice(0, MAX_SCENES)
+    .map((sc, i) => ({
+      name: typeof sc.name === 'string' && sc.name.trim() ? sc.name.slice(0, MAX_SCENE_NAME) : `Scene ${i + 1}`,
+      // A scene never holds a sequence of its own.
+      look: lookOf(sanitize({ ...(sc.look as object), sequence: undefined })),
+      hold: time(sc.hold, 20),
+      fade: time(sc.fade, 5),
+    }));
+  return {
+    enabled: src.enabled === true && scenes.length > 0,
+    unit: src.unit === 'beats' ? 'beats' : 'seconds',
+    loop: src.loop !== false,
+    scenes,
+  };
 }

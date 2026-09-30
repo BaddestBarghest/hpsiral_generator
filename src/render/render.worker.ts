@@ -31,6 +31,9 @@ self.onmessage = (e: MessageEvent<ToRender>) => {
       case 'alignBeat':
         loop?.alignBeat();
         break;
+      case 'seekScene':
+        loop?.seekScene(msg.index);
+        break;
       case 'snapshot':
         loop?.snapshot();
         break;

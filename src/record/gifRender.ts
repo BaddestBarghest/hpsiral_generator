@@ -2,6 +2,7 @@
 import { applyPalette, GIFEncoder, quantize, type Palette } from 'gifenc';
 import { initialTimeline, step } from '../engine/timeline';
 import { loopMax, loopsChangeColours } from '../engine/modulation';
+import { sequenceLooks } from '../engine/sequence';
 import { Renderer } from '../render/Renderer';
 import { frameCount, type RenderJob } from './renderJob';
 import { RenderCancelled } from './renderErrors';
@@ -81,8 +82,14 @@ export async function renderGif(
   }
 }
 
-/** Whether colours change over time (hue roll, trails, beat loops, or shifting through several colours). */
-function colorsAnimate({ settings: s }: RenderJob): boolean {
+/**
+ * Whether colours change over time (hue roll, trails, beat loops, shifting through several
+ * colours, or a sequence moving between scenes).
+ */
+function colorsAnimate({ settings }: RenderJob): boolean {
+  const looks = sequenceLooks(settings);
+  if (looks.length > 1) return true;
+  const s = looks[0];
   return (
     s.hueRoll !== 0 ||
     loopMax(s, 'trails') > 0 || // blended echoes create colours no sample frame contains

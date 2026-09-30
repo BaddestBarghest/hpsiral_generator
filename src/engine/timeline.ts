@@ -2,6 +2,7 @@ import type { Settings } from '../settings/schema';
 import { beatsPerSecond } from './rhythm';
 import { loopIntegral } from './modulation';
 import { wrap } from './math';
+import { advanceSequence, resolveSequence, sequenceActive } from './sequence';
 
 /**
  * Flow phase wraps at lcm(1..16), so every arm count divides it and stripe indices
@@ -38,6 +39,8 @@ export interface TimelineState {
   kaleidoPhase: number;
   /** Beats elapsed at the master tempo (not wrapped; drives beat loops and pulses). */
   beatPhase: number;
+  /** Position in the scene sequence, in its unit (seconds or beats); 0 while none plays. */
+  seqPos: number;
 }
 
 export function initialTimeline(): TimelineState {
@@ -52,9 +55,9 @@ export function initialTimeline(): TimelineState {
     wobblePhase: 0,
     kaleidoPhase: 0,
     beatPhase: 0,
+    seqPos: 0,
   };
 }
-
 
 /**
  * Advances a colour phase; at speed 0 it returns to 0, so switching hue roll or a colour
@@ -65,6 +68,18 @@ const colourPhase = (phase: number, speed: number, dt: number, period: number) =
   speed === 0 ? 0 : wrap(phase + speed * dt, period);
 
 /**
+ * In a sequence, a fade that ends a colour shift would snap the colours back to their own
+ * at the very end. Instead the phase eases back at `rate` per second to the nearest position
+ * that looks the same as 0 (a multiple of `unit`, which divides `period`).
+ */
+function settlingPhase(phase: number, speed: number, dt: number, period: number, unit: number, rate: number): number {
+  if (speed !== 0) return wrap(phase + speed * dt, period);
+  const d = Math.round(phase / unit) * unit - phase;
+  const move = rate * dt;
+  return Math.abs(d) <= move ? 0 : wrap(phase + Math.sign(d) * move, period);
+}
+
+/**
  * Puts a beat exactly at the current moment (the user just tapped one), moving the beat
  * position by at most half a beat so everything beat-driven lines up with the taps.
  */
@@ -72,27 +87,35 @@ export function alignBeat(state: TimelineState): TimelineState {
   return { ...state, beatPhase: Math.round(state.beatPhase) };
 }
 
-export function step(state: TimelineState, s: Settings, dt: number): TimelineState {
+export function step(state: TimelineState, settings: Settings, dt: number): TimelineState {
+  // With a sequence playing, everything follows the scene showing at this moment.
+  const s = resolveSequence(settings, state.seqPos);
+  const inSequence = sequenceActive(settings);
   const dir = s.direction === 'inward' ? 1 : -1;
   const dir2 = s.s2Direction === 'inward' ? 1 : -1;
   const beatPhase = state.beatPhase + beatsPerSecond(s) * dt;
   // Cycles flowed this step; exact integrals when a speed loops with the beat.
   const flow = loopIntegral(s, 'speed', state.beatPhase, beatPhase, dt);
   const flow2 = loopIntegral(s, 's2Speed', state.beatPhase, beatPhase, dt);
+  const kaleidoSpins = s.kaleidoSpin !== 0 || !!s.loops.kaleidoSpin;
+  const colour = (phase: number, speed: number, period: number, unit: number, rate: number) =>
+    inSequence ? settlingPhase(phase, speed, dt, period, unit, rate) : colourPhase(phase, speed, dt, period);
   return {
     time: state.time + dt,
     flowPhase: wrap(state.flowPhase + dir * flow, FLOW_PERIOD),
     flowPhase2: wrap(state.flowPhase2 + dir2 * flow2, FLOW_PERIOD),
-    huePhase: colourPhase(state.huePhase, s.hueRoll, dt, 1),
-    armColorPhase: colourPhase(state.armColorPhase, s.armShift, dt, COLOR_PERIOD),
-    gapColorPhase: colourPhase(state.gapColorPhase, s.gapShift, dt, COLOR_PERIOD),
-    s2ColorPhase: colourPhase(state.s2ColorPhase, s.s2Shift, dt, COLOR_PERIOD),
+    huePhase: colour(state.huePhase, s.hueRoll, 1, 1, 0.25),
+    armColorPhase: colour(state.armColorPhase, s.armShift, COLOR_PERIOD, s.armColors.length, 1),
+    gapColorPhase: colour(state.gapColorPhase, s.gapShift, COLOR_PERIOD, s.gapColors.length, 1),
+    s2ColorPhase: colour(state.s2ColorPhase, s.s2Shift, COLOR_PERIOD, s.s2Colors.length, 1),
     wobblePhase: wrap(state.wobblePhase + s.wobbleSpeed * dt, 1),
     // Switched off, the sectors go back to where they started, like the colour phases.
-    kaleidoPhase:
-      s.kaleidoSpin === 0 && !s.loops.kaleidoSpin
-        ? 0
-        : wrap(state.kaleidoPhase + loopIntegral(s, 'kaleidoSpin', state.beatPhase, beatPhase, dt), 1),
+    kaleidoPhase: kaleidoSpins
+      ? wrap(state.kaleidoPhase + loopIntegral(s, 'kaleidoSpin', state.beatPhase, beatPhase, dt), 1)
+      : colour(state.kaleidoPhase, 0, 1, 1, 0.25),
     beatPhase,
+    seqPos: inSequence
+      ? advanceSequence(settings.sequence, state.seqPos, settings.sequence.unit === 'beats' ? beatPhase - state.beatPhase : dt)
+      : 0,
   };
 }

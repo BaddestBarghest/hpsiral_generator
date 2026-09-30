@@ -3,6 +3,7 @@
   import { ClapperboardPlaySolid } from 'flowbite-svelte-icons';
   import type { Settings } from '../settings/schema';
   import { exactLoop, planLoop, type LoopMode } from '../engine/loop';
+  import { sequenceActive, sequenceSeconds } from '../engine/sequence';
   import {
     estimateBitrate,
     fpsLabel,
@@ -53,7 +54,10 @@
   const probeBitrate = $derived(estimateBitrate(videoRes.width, videoRes.height, videoFps, quality));
   const validDuration = $derived(Number.isFinite(duration) && duration >= 0.1 && duration <= MAX_SECONDS);
 
-  const snap = $derived(loop ? $state.snapshot(settings) : null);
+  // A sequence changes the look over time, which the loop planner can't account for.
+  const inSequence = $derived(sequenceActive(settings));
+  const wholeSequence = $derived(inSequence ? Math.round(sequenceSeconds(settings) * 100) / 100 : 0);
+  const snap = $derived(loop && !inSequence ? $state.snapshot(settings) : null);
   // True repeat length with the speeds as set, and the shortest loop with nudged speeds.
   const exact = $derived(snap ? exactLoop(snap, fps) : null);
   const shortLoop = $derived(snap ? planLoop(snap, 0, fps, 'short') : null);
@@ -152,6 +156,14 @@
       <Input id="rnd-dur" size="sm" type="number" min={0.1} max={600} step={0.1} disabled={busy} bind:value={duration} />
     </div>
   </div>
+  {#if inSequence && wholeSequence > 0}
+    <div class="flex items-center gap-2 text-xs text-gray-300">
+      <span class="flex-1">The sequence plays from its first scene; one pass lasts {fmtSeconds(wholeSequence)}.</span>
+      <Button size="xs" color="alternative" class="shrink-0" disabled={busy || duration === wholeSequence} onclick={() => (duration = wholeSequence)}>
+        Use whole sequence
+      </Button>
+    </div>
+  {/if}
   {#if !isGif}
     <div class="space-y-1.5">
       <Label for="rnd-quality" class="text-sm">Quality</Label>
@@ -160,7 +172,10 @@
   {/if}
 
   <div class="space-y-1.5">
-    <Toggle size="small" disabled={busy} bind:checked={loop}>Seamless loop</Toggle>
+    <Toggle size="small" disabled={busy || inSequence} bind:checked={loop}>Seamless loop</Toggle>
+    {#if inSequence}
+      <Helper class="text-xs">Not available while a sequence plays: the scenes change the look over time.</Helper>
+    {/if}
     {#if plan}
       <div class="space-y-2 rounded-md bg-gray-800 p-2.5 text-xs text-gray-300">
         {#if exact && shortLoop}
@@ -244,7 +259,7 @@
   </Button>
   <Helper class="text-xs">
     Renders every frame at an exact time step, so the result is perfectly smooth at any size, even if your device
-    can't play it live. It starts from the beginning of the animation with the current settings.
+    can't play it live. It starts from the beginning of the animation with the current settings{inSequence ? ' and the first scene' : ''}.
     {#if isGif}
       GIFs use a shared 256-colour palette and repeat forever.
     {:else}

@@ -10,6 +10,8 @@ export interface RenderHost {
   setPlaying(p: boolean): void;
   /** Makes this moment a beat (tap tempo). */
   alignBeat(): void;
+  /** Jumps to the start of scene `index` of the sequence. */
+  seekScene(index: number): void;
   /** Saves the next frame as a PNG; it arrives through `onEvent` as `snapshot`. */
   snapshot(): void;
   /** Sends the user's uploaded font (null = removed) to wherever the text is drawn. */
@@ -53,6 +55,7 @@ export async function createRenderHost(canvas: HTMLCanvasElement, init: HostInit
       setViewport: (viewport) => post({ type: 'viewport', viewport }),
       setPlaying: (playing) => post({ type: 'playing', playing }),
       alignBeat: () => post({ type: 'alignBeat' }),
+      seekScene: (index) => post({ type: 'seekScene', index }),
       snapshot: () => post({ type: 'snapshot' }),
       setCustomFont: (data) => post({ type: 'customFont', data }),
       startRender: (job, output) => post({ type: 'render', job, output }, output ? [output] : []),
@@ -71,6 +74,7 @@ export async function createRenderHost(canvas: HTMLCanvasElement, init: HostInit
     setViewport: (v) => loop.setViewport(v),
     setPlaying: (p) => loop.setPlaying(p),
     alignBeat: () => loop.alignBeat(),
+    seekScene: (index) => loop.seekScene(index),
     snapshot: () => loop.snapshot(),
     // Inline, the main thread's copy (set by ui/customFont) is the one drawn with.
     setCustomFont: () => loop.redraw(),

@@ -14,6 +14,8 @@ export type ToRender =
   | { type: 'viewport'; viewport: Viewport }
   | { type: 'playing'; playing: boolean }
   | { type: 'alignBeat' }
+  /** Jump to the start of a scene of the sequence. */
+  | { type: 'seekScene'; index: number }
   /** Save the next live frame as a PNG (answered with `snapshot`). */
   | { type: 'snapshot' }
   /** The user's uploaded font file, or null when removed. */
@@ -26,6 +28,8 @@ export type FromRender =
   | { type: 'ready' }
   | { type: 'error'; message: string }
   | { type: 'stats'; fps: number }
+  /** The sequence moved to another scene or fade; `scene` is -1 when no sequence plays. */
+  | { type: 'sequence'; scene: number; next: number }
   | { type: 'snapshot'; png: Blob }
   | { type: 'renderProgress'; frame: number; total: number }
   /** `buffer` is null when the file was streamed straight to disk. */
